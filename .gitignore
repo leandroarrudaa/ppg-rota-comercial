@@ -1,0 +1,14 @@
+# dependências
+node_modules/
+app/node_modules/
+
+# build
+dist/
+app/dist/
+
+# logs e temporários
+*.log
+saida/*.txt
+
+# sistema
+.DS_Store

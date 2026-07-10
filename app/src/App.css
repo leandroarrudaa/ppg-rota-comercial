@@ -1,0 +1,396 @@
+/* ---------- App shell (ferramenta full-height) ---------- */
+html, body, #root { height: 100%; }
+.app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Header */
+.nav {
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--line);
+  z-index: 1000;
+}
+.nav-inner { height: 84px; display: flex; align-items: center; gap: 28px; padding: 0 26px; }
+.brand { display: flex; align-items: center; gap: 11px; }
+.brand-logo { height: 52px; width: auto; display: block; }
+.brand-wordmark { display: flex; flex-direction: column; line-height: 1; }
+.brand-wordmark span {
+  font-family: var(--font-display); font-weight: 700; font-style: italic;
+  font-size: 1.5rem; letter-spacing: -0.02em; color: var(--navy);
+}
+.brand-wordmark small {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.14em;
+  color: var(--navy); text-transform: uppercase; margin-top: 2px;
+}
+
+.tabs { display: flex; gap: 4px; margin-left: 10px; }
+.tab {
+  border: none; background: transparent; color: var(--ink-soft);
+  font-size: 0.92rem; font-weight: 500; padding: 0.48rem 0.95rem;
+  border-radius: var(--r-pill); transition: background 0.15s, color 0.15s;
+}
+.tab:hover { background: var(--surface-2); }
+.tab.active { background: var(--navy); color: #fff; }
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+/* Conteúdo */
+.conteudo { flex: 1 1 auto; min-height: 0; }
+.vazio { height: 100%; display: grid; place-content: center; text-align: center; gap: 6px; color: var(--ink-soft); }
+
+/* ---------- Layout do Mapa ---------- */
+.mapa-layout { height: 100%; display: grid; grid-template-columns: 340px 1fr; }
+.painel {
+  border-right: none;
+  background:
+    radial-gradient(520px 240px at 0% 0%, rgba(60,76,170,0.45), transparent 70%),
+    linear-gradient(168deg, #0d1234 0%, #161e4d 48%, #243083 100%);
+  color: rgba(255, 255, 255, 0.85);
+  padding: 22px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px;
+  position: relative; z-index: 1100;
+  box-shadow: 14px 0 30px rgba(8, 11, 38, 0.42);
+}
+.painel-head h3 { font-size: 1.32rem; letter-spacing: -0.02em; color: #fff; }
+
+.field { margin: 0; }
+.input {
+  width: 100%; border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 0.6rem 0.8rem; font-family: var(--font-body); font-size: 0.92rem;
+  background: var(--surface); color: var(--ink); outline: none;
+}
+.input:focus { border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-bg); }
+select.input { cursor: pointer; }
+
+.filtro-grupo { display: flex; flex-direction: column; gap: 8px; }
+.filtro-titulo { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); }
+.filtro-faixas { display: flex; flex-direction: column; gap: 6px; }
+
+.toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  border: 1px solid var(--line); background: var(--surface);
+  border-radius: var(--r-pill); padding: 0.5rem 0.8rem;
+  font-size: 0.9rem; font-weight: 600; color: var(--ink-soft);
+  opacity: 0.5; transition: all 0.15s;
+}
+.toggle.on { opacity: 1; }
+.toggle b { margin-left: auto; font-weight: 700; }
+.toggle.full { justify-content: flex-start; }
+.toggle.chip-gold.on { background: var(--gold-bg); border-color: transparent; color: var(--gold-deep); }
+.toggle.chip-silver.on { background: var(--silver-bg); border-color: transparent; color: var(--silver-deep); }
+.toggle.chip-bronze.on { background: var(--bronze-bg); border-color: transparent; color: var(--bronze-deep); }
+.toggle.chip-risk.on { background: var(--risk-bg); border-color: transparent; color: var(--risk); }
+
+/* ---------- Busca com ícone ---------- */
+.field.search { position: relative; }
+.search-ico { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+.input-search { padding-left: 38px; }
+
+/* ---------- Medalhões metálicos (Faixa RFM) ---------- */
+.medais { display: flex; flex-direction: column; gap: 10px; }
+.medal {
+  display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
+  padding: 11px 13px; border-radius: 18px; cursor: pointer; position: relative; overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.55));
+  backdrop-filter: blur(10px) saturate(160%); -webkit-backdrop-filter: blur(10px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.85);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 6px 18px rgba(22,28,82,0.06), 0 2px 5px rgba(22,28,82,0.04);
+  transition: transform .2s cubic-bezier(.2,.7,.2,1), box-shadow .25s, opacity .2s, filter .2s;
+}
+.medal::before { content: ""; position: absolute; inset: 0; opacity: .16; pointer-events: none; }
+.medal-gold::before { background: radial-gradient(140px 70px at 0% 50%, #d9b743, transparent 70%); }
+.medal-silver::before { background: radial-gradient(140px 70px at 0% 50%, #b8bec5, transparent 70%); }
+.medal-bronze::before { background: radial-gradient(140px 70px at 0% 50%, #c98f5c, transparent 70%); }
+.medal:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(22,28,82,0.11), 0 4px 9px rgba(22,28,82,0.06); }
+.medal:active { transform: translateY(0); }
+.medal.off { opacity: .5; filter: grayscale(.55); }
+
+.coin {
+  width: 40px; height: 40px; border-radius: 50%; flex: 0 0 auto; position: relative;
+  box-shadow: inset 0 2px 3px rgba(255,255,255,0.7), inset 0 -3px 6px rgba(0,0,0,0.3), 0 3px 7px rgba(0,0,0,0.2);
+}
+.coin::before { content: ""; position: absolute; inset: 5px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.4); }
+.coin::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.7), rgba(255,255,255,0) 42%); }
+.coin-gold { background: linear-gradient(140deg, #fbe9a8 0%, #e3c25a 30%, #c9a227 56%, #8f6f12 100%); }
+.coin-silver { background: linear-gradient(140deg, #fafbfc 0%, #d2d7dc 30%, #aab0b7 56%, #7b8087 100%); }
+.coin-bronze { background: linear-gradient(140deg, #edc59a 0%, #c98f5c 30%, #b4793f 56%, #7d4f25 100%); }
+
+.medal-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.medal-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.medal-name { font-family: var(--font-display); font-weight: 700; font-size: 0.98rem; color: var(--ink); }
+.medal-count { font-family: var(--font-display); font-weight: 700; font-size: 1.08rem; color: var(--ink); }
+.medal-bar { height: 5px; border-radius: 999px; background: rgba(22,28,82,0.09); overflow: hidden; }
+.medal-bar > i { display: block; height: 100%; border-radius: 999px; transition: width .45s cubic-bezier(.2,.7,.2,1); }
+.fill-gold { background: linear-gradient(90deg, #e3c25a, #c9a227); }
+.fill-silver { background: linear-gradient(90deg, #cfd4d9, #8e949b); }
+.fill-bronze { background: linear-gradient(90deg, #d09a68, #b4793f); }
+
+/* ---------- Card "em risco" ---------- */
+.risco-card {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 13px 15px; border-radius: 18px; cursor: pointer; position: relative;
+  background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(253,236,234,0.7));
+  backdrop-filter: blur(10px) saturate(150%); -webkit-backdrop-filter: blur(10px) saturate(150%);
+  border: 1px solid rgba(232,84,63,0.22);
+  box-shadow: 0 6px 16px rgba(232,84,63,0.07);
+  transition: transform .2s, box-shadow .25s, opacity .2s;
+}
+.risco-card:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(232,84,63,0.14); }
+.risco-card.on { border-color: var(--risk); box-shadow: 0 0 0 2px rgba(232,84,63,0.18), 0 10px 22px rgba(232,84,63,0.15); }
+.risco-card:not(.on) { opacity: .8; }
+.risco-pulse { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; background: var(--risk); animation: riscoPulse 2.4s infinite; }
+@keyframes riscoPulse { 0% { box-shadow: 0 0 0 0 rgba(232,84,63,0.45); } 70% { box-shadow: 0 0 0 8px rgba(232,84,63,0); } 100% { box-shadow: 0 0 0 0 rgba(232,84,63,0); } }
+.risco-body { flex: 1; display: flex; flex-direction: column; }
+.risco-label { font-weight: 700; font-size: 0.92rem; color: var(--ink); }
+.risco-sub { font-size: 0.74rem; color: var(--muted); }
+.risco-count { font-family: var(--font-display); font-weight: 700; font-size: 1.2rem; color: var(--risk); }
+
+/* card do cliente selecionado */
+.cliente-card {
+  margin-top: 4px; border: 1px solid rgba(255,255,255,0.8); border-radius: var(--r-md);
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(244,245,249,0.7));
+  backdrop-filter: blur(10px) saturate(150%); -webkit-backdrop-filter: blur(10px) saturate(150%);
+  box-shadow: 0 8px 22px rgba(22,28,82,0.08), inset 0 1px 0 rgba(255,255,255,0.8);
+}
+.kv { margin-top: 14px; display: flex; flex-direction: column; gap: 9px; }
+.kv > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 0.9rem; }
+.kv span { color: var(--muted); }
+.kv b { font-weight: 700; text-align: right; }
+
+.mapa-wrap { position: relative; height: 100%; }
+.leaflet-container { background: #eef1f3; font-family: var(--font-body); }
+
+/* balão do cliente no mapa */
+.leaflet-popup-content { margin: 12px 14px; min-width: 200px; }
+.leaflet-popup-content-wrapper { border-radius: var(--r-md); box-shadow: var(--shadow-lg); }
+.pop { display: flex; flex-direction: column; gap: 6px; }
+.pop-nome { font-family: var(--font-display); font-weight: 800; font-size: 0.95rem; color: var(--ink); line-height: 1.2; }
+.pop-end { font-size: 0.82rem; color: var(--ink-soft); line-height: 1.4; }
+.pop-tel { font-size: 0.86rem; font-weight: 600; color: var(--ink); }
+.pop-meta { display: flex; gap: 6px; margin-top: 2px; }
+.pop-info { font-size: 0.78rem; color: var(--muted); }
+
+/* ---------- Plano da Semana ---------- */
+.dias { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.dia-btn {
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
+  border-radius: var(--r-sm); padding: 0.5rem 0; font-size: 0.82rem; font-weight: 600;
+  transition: all 0.15s;
+}
+.dia-btn:hover { background: var(--surface-2); }
+.dia-btn.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+
+.slider { width: 100%; accent-color: var(--navy); cursor: pointer; }
+
+.resumo {
+  border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--surface);
+}
+.resumo-item {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 0.6rem 0.85rem; font-size: 0.9rem; border-bottom: 1px solid var(--line-soft);
+}
+.resumo-item:last-child { border-bottom: none; }
+.resumo-item span { color: var(--muted); }
+.resumo-item b { font-weight: 700; font-size: 1.02rem; }
+.resumo-item.destaque { background: var(--navy-bg); }
+.resumo-item.destaque span { color: var(--navy); }
+.resumo-item.destaque b { color: var(--navy); }
+
+.rota-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.rota-lista li { display: flex; gap: 10px; padding: 8px; border-radius: var(--r-sm); cursor: pointer; transition: background 0.12s; }
+.rota-lista li:hover { background: var(--surface-2); }
+.rota-lista li.aberto { background: var(--surface-2); }
+.rota-rec {
+  margin-top: 8px; padding: 9px 11px; border-radius: var(--r-sm);
+  background: var(--bg); border: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 3px; font-size: 0.82rem; line-height: 1.4;
+}
+.rota-rec b { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.rota-rec span { color: var(--ink-soft); }
+.ordem-num {
+  flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%;
+  color: #fff; font-weight: 800; font-size: 0.78rem; display: grid; place-items: center;
+  font-family: var(--font-display); margin-top: 2px;
+}
+.rota-info { min-width: 0; }
+.rota-nome { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rota-meta { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 0.82rem; }
+
+/* ---------- Sub-abas do Plano (Visitas / Contato) ---------- */
+.plano-wrap { height: 100%; display: flex; flex-direction: column; }
+.subtabs-bar {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 20px;
+  padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--surface);
+  flex-wrap: wrap;
+}
+.subtabs { display: flex; gap: 8px; }
+.subtab {
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
+  border-radius: var(--r-pill); padding: 0.5rem 1rem; font-size: 0.92rem; font-weight: 600;
+  display: flex; align-items: center; gap: 8px; transition: all 0.15s;
+}
+.subtab:hover { background: var(--surface-2); }
+.subtab.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.subtab b { background: rgba(255,255,255,0.18); padding: 1px 7px; border-radius: 999px; font-size: 0.8rem; }
+.subtab:not(.on) b { background: var(--surface-2); color: var(--muted); }
+
+.corte { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; margin-left: auto; }
+.corte-slider { width: 140px; }
+.corte b { white-space: nowrap; }
+
+.plano-corpo { flex: 1 1 auto; min-height: 0; }
+
+/* ---------- Lista de Contato (cards premium) ---------- */
+.contato-layout { grid-template-columns: 320px 1fr; }
+.painel-largo { gap: 16px; }
+.contato-lista-wrap {
+  overflow-y: auto; padding: 26px 24px;
+  background:
+    radial-gradient(600px 300px at 100% 0%, rgba(35,45,122,0.06), transparent 70%),
+    linear-gradient(180deg, #eef0f7 0%, #e5e8f1 100%);
+}
+.contato-lista { list-style: none; margin: 0 auto; padding: 2px; max-width: 800px; display: flex; flex-direction: column; gap: 14px; }
+
+.contato-card {
+  display: flex; gap: 15px; padding: 16px 18px; border-radius: 20px; cursor: pointer;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f5fb 100%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 10px 26px rgba(22, 28, 82, 0.08), 0 2px 6px rgba(22, 28, 82, 0.05);
+  transition: transform .22s cubic-bezier(.2, .7, .2, 1), box-shadow .25s;
+}
+.contato-card:hover { transform: translateY(-3px); box-shadow: 0 20px 40px rgba(22, 28, 82, 0.14), 0 6px 14px rgba(22, 28, 82, 0.07); }
+.contato-card.aberto { box-shadow: 0 22px 46px rgba(22, 28, 82, 0.16), 0 6px 14px rgba(22, 28, 82, 0.08); }
+
+/* moeda metálica numerada */
+.contato-coin {
+  width: 44px; height: 44px; border-radius: 50%; flex: 0 0 auto; position: relative;
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 0.98rem;
+  color: rgba(40, 30, 0, 0.62); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.7), inset 0 -3px 6px rgba(0, 0, 0, 0.3), 0 4px 9px rgba(0, 0, 0, 0.2);
+}
+.contato-coin::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0) 44%); pointer-events: none; }
+
+.contato-info { min-width: 0; flex: 1; }
+.contato-topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.contato-nome { font-family: var(--font-display); font-weight: 700; font-size: 1.02rem; color: var(--ink); line-height: 1.25; }
+.contato-tags { display: flex; align-items: center; gap: 8px; margin: 9px 0 11px; flex-wrap: wrap; }
+.contato-tempo { font-size: 0.8rem; color: var(--muted); }
+.contato-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tel-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--navy-bg); color: var(--navy); font-weight: 600; font-size: 0.85rem;
+  padding: 6px 12px; border-radius: 999px;
+}
+.tel-chip .sem-tel { color: var(--faint); font-weight: 500; }
+.contato-valor { font-size: 0.84rem; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
+.contato-valor small { font-weight: 500; color: var(--faint); }
+
+/* badge de prioridade com degradê */
+.prio { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.02em; padding: 4px 11px; border-radius: 999px; white-space: nowrap; flex: 0 0 auto; }
+.prio-alta { background: linear-gradient(135deg, #ff6f59, #e8543f); color: #fff; box-shadow: 0 3px 8px rgba(232, 84, 63, 0.32); }
+.prio-media { background: linear-gradient(135deg, #f3cb55, #d9a526); color: #5a4500; box-shadow: 0 3px 8px rgba(217, 165, 38, 0.28); }
+.prio-baixa { background: linear-gradient(135deg, #eef0f4, #e2e5ea); color: var(--muted); }
+
+/* script (painel neumórfico inset) */
+.contato-script {
+  margin-top: 13px; padding: 14px 16px; border-radius: 14px;
+  background: #ebeef5;
+  box-shadow: inset 3px 3px 7px rgba(22, 28, 82, 0.1), inset -3px -3px 7px rgba(255, 255, 255, 0.95);
+}
+.contato-script b { display: block; color: var(--navy); font-size: 0.82rem; font-weight: 700; margin-bottom: 5px; }
+.contato-script p { margin: 0; font-size: 0.87rem; color: var(--ink-soft); line-height: 1.55; }
+
+.coin-gold { background: linear-gradient(140deg, #fbe9a8 0%, #e3c25a 30%, #c9a227 56%, #8f6f12 100%); }
+.coin-silver { background: linear-gradient(140deg, #fafbfc 0%, #d2d7dc 30%, #aab0b7 56%, #7b8087 100%); }
+.coin-bronze { background: linear-gradient(140deg, #edc59a 0%, #c98f5c 30%, #b4793f 56%, #7d4f25 100%); }
+
+/* pin numerado da rota */
+.pin-num {
+  width: 26px; height: 26px; border-radius: 50%; color: #fff; font-weight: 800;
+  font-size: 0.8rem; display: grid; place-items: center; border: 2px solid #fff;
+  font-family: var(--font-display); box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+@media (max-width: 820px) {
+  .mapa-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .painel { border-right: none; border-bottom: 1px solid var(--line); max-height: 42vh; }
+  .tabs { display: none; }
+}
+
+/* ============================================================
+   MENU LATERAL — tema azul-marinho (dark) sobre fundo da marca
+   ============================================================ */
+.painel .muted { color: rgba(255, 255, 255, 0.6); }
+.painel .faint { color: rgba(255, 255, 255, 0.42); }
+.painel .filtro-titulo { color: rgba(255, 255, 255, 0.5); }
+
+/* campos (busca + cidade) */
+.painel .input {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.painel .input::placeholder { color: rgba(255, 255, 255, 0.45); }
+.painel .input:focus { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255, 207, 0, 0.2); }
+.painel select.input option { color: #111; }
+.painel .search-ico { color: rgba(255, 255, 255, 0.5); }
+
+/* medalhões em vidro escuro (moedas metálicas se mantêm) */
+.painel .medal {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.05));
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+.painel .medal::before { opacity: 0.26; }
+.painel .medal:hover { box-shadow: 0 14px 28px rgba(0, 0, 0, 0.38); }
+.painel .medal-name, .painel .medal-count { color: #fff; }
+.painel .medal-bar { background: rgba(255, 255, 255, 0.16); }
+
+/* card em risco */
+.painel .risco-card {
+  background: linear-gradient(180deg, rgba(232, 84, 63, 0.22), rgba(232, 84, 63, 0.08));
+  border-color: rgba(232, 84, 63, 0.45);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+.painel .risco-card.on { box-shadow: 0 0 0 2px rgba(255, 138, 120, 0.5), 0 10px 24px rgba(0, 0, 0, 0.3); }
+.painel .risco-label { color: #fff; }
+.painel .risco-sub { color: rgba(255, 255, 255, 0.6); }
+.painel .risco-count { color: #ff8a78; }
+
+/* botão primário vira AMARELO PPG (pop sobre o azul) */
+.painel .btn-primary { background: var(--yellow); color: var(--navy-deep); }
+.painel .btn-primary:hover { background: #ffd836; box-shadow: 0 6px 16px rgba(255, 207, 0, 0.3); }
+
+/* ficha do cliente */
+.painel .cliente-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04));
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+.painel .cliente-card h4 { color: #fff; }
+.painel .kv span { color: rgba(255, 255, 255, 0.6); }
+.painel .kv b { color: #fff; }
+
+/* Plano de Visitas / Contato — dias, resumo, lista */
+.painel .dia-btn {
+  background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.82);
+}
+.painel .dia-btn:hover { background: rgba(255, 255, 255, 0.14); }
+.painel .dia-btn.on { background: var(--yellow); color: var(--navy-deep); border-color: var(--yellow); }
+
+.painel .resumo {
+  background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.12);
+}
+.painel .resumo-item { border-bottom-color: rgba(255, 255, 255, 0.09); }
+.painel .resumo-item span { color: rgba(255, 255, 255, 0.62); }
+.painel .resumo-item b { color: #fff; }
+.painel .resumo-item.destaque { background: rgba(255, 207, 0, 0.16); }
+.painel .resumo-item.destaque span, .painel .resumo-item.destaque b { color: var(--yellow); }
+
+.painel .rota-lista li:hover, .painel .rota-lista li.aberto { background: rgba(255, 255, 255, 0.08); }
+.painel .rota-nome { color: #fff; }
+.painel .rota-rec {
+  background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.13);
+}
+.painel .rota-rec span { color: rgba(255, 255, 255, 0.78); }
