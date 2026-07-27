@@ -67,6 +67,9 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
   const [carregandoRota, setCarregandoRota] = useState(false);
   const [fichaAberta, setFichaAberta] = useState(null); // cliente selecionado, ou null
   const [finalizando, setFinalizando] = useState(false);
+  // Só importa em telas pequenas: no mobile painel e mapa não cabem juntos,
+  // então alterna qual ocupa a tela. Começa em "painel" (filtro).
+  const [modoMobile, setModoMobile] = useState("painel");
   const mapRef = useRef(null);
   const bboxAtualRef = useRef(null);
 
@@ -210,7 +213,14 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
     const min = rota.estrada ? rota.estrada.min : (kmReta * 1.35) / 0.6;
     const linha = rota.estrada ? rota.estrada.linha : rota.ordem.map((c) => [c.lat, c.lng]);
     return (
-      <div className="mapa-layout rota-dia-layout">
+      <div className={"mapa-layout rota-dia-layout" + (modoMobile === "mapa" ? " modo-mapa-mobile" : " modo-painel-mobile")}>
+        <button
+          type="button"
+          className="btn-alternar-mobile"
+          onClick={() => setModoMobile((m) => (m === "mapa" ? "painel" : "mapa"))}
+        >
+          {modoMobile === "mapa" ? "☰ Ver filtros" : "🗺️ Ver mapa"}
+        </button>
         <aside className="painel">
           <div className="painel-head">
             <h3>Rota do dia</h3>
@@ -280,7 +290,14 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
   }
 
   return (
-    <div className="mapa-layout rota-dia-layout">
+    <div className={"mapa-layout rota-dia-layout" + (modoMobile === "mapa" ? " modo-mapa-mobile" : " modo-painel-mobile")}>
+      <button
+        type="button"
+        className="btn-alternar-mobile"
+        onClick={() => setModoMobile((m) => (m === "mapa" ? "painel" : "mapa"))}
+      >
+        {modoMobile === "mapa" ? "☰ Ver filtros" : "🗺️ Ver mapa"}
+      </button>
       <aside className="painel rota-dia-painel">
         <div className="painel-head">
           <h3>Rota do dia</h3>

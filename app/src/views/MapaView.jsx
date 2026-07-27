@@ -56,7 +56,8 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
   const [novoClienteAberto, setNovoClienteAberto] = useState(false);
   // Só importa em telas pequenas (a media query decide se o botão aparece):
   // no mobile painel e mapa não cabem juntos, então alterna qual ocupa a tela.
-  const [modoMobile, setModoMobile] = useState("mapa");
+  // Começa em "painel" (filtro) — decisão explícita do usuário.
+  const [modoMobile, setModoMobile] = useState("painel");
 
   const [incluirInativos, setIncluirInativos] = useState(false);
   const [clientesInativos, setClientesInativos] = useState(null); // null = ainda não buscou
