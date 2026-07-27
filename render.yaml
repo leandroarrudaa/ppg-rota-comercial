@@ -25,7 +25,6 @@ services:
   - type: web
     name: ppg-rota-comercial
     runtime: static
-    plan: free
     rootDir: app
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
