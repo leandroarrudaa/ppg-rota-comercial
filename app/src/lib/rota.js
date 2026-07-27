@@ -30,7 +30,7 @@ export function motivoVisita(c) {
 }
 
 // ordena uma lista de pontos pelo vizinho mais próximo, a partir de um início
-function vizinhoMaisProximo(pontos, inicio) {
+export function vizinhoMaisProximo(pontos, inicio) {
   const restantes = [...pontos];
   const ordem = [];
   let atual = inicio;

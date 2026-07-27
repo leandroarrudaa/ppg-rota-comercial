@@ -3,20 +3,81 @@ import "leaflet/dist/leaflet.css";
 import "./App.css";
 import MapaView from "./views/MapaView";
 import PlanoView from "./views/PlanoView";
+import LoginView from "./views/LoginView";
+import RelatorioVisita from "./views/RelatorioVisita";
+import RotaDiaView from "./views/RotaDiaView";
+import SugestoesVinculoView from "./views/SugestoesVinculoView";
+import UsuariosView from "./views/UsuariosView";
+import { api, limparSessao, registrarAoExpirar, tokenSalvo, usuarioSalvo } from "./lib/api";
 
-const ABAS = ["Mapa", "Plano da Semana", "Carteira", "Painel"];
+const ABAS_BASE = ["Mapa", "Plano da Semana", "Rota do Dia", "Carteira"];
 
 export default function App() {
   const [aba, setAba] = useState("Mapa");
   const [clientes, setClientes] = useState(null);
   const [logoOk, setLogoOk] = useState(true);
+  const [usuario, setUsuario] = useState(() => (tokenSalvo() ? usuarioSalvo() : null));
+  const [erroCarga, setErroCarga] = useState("");
+  const [visitaPendente, setVisitaPendente] = useState(null);
+  const [visitasHojeIds, setVisitasHojeIds] = useState(() => new Set());
+  const [menuAberto, setMenuAberto] = useState(false);
+
+  // sessão expirada em qualquer chamada -> volta pro login
+  useEffect(() => {
+    registrarAoExpirar(() => setUsuario(null));
+  }, []);
 
   useEffect(() => {
-    fetch("/clientes.json")
-      .then((r) => r.json())
+    if (!usuario) return;
+    setClientes(null);
+    setErroCarga("");
+    setAba("Mapa"); // troca de conta (ex.: admin -> vendedor) não deve manter aba restrita na tela
+    setMenuAberto(false);
+    api.get("/api/clientes")
       .then(setClientes)
-      .catch(() => setClientes([]));
-  }, []);
+      .catch((e) => { setClientes([]); setErroCarga(e.message); });
+    // restaura o bloqueio se o app recarregou no meio de uma visita
+    api.get("/api/visitas/pendente").then(setVisitaPendente).catch(() => {});
+    api.get("/api/visitas/hoje").then((ids) => setVisitasHojeIds(new Set(ids))).catch(() => {});
+  }, [usuario]);
+
+  function sair() {
+    limparSessao();
+    setUsuario(null);
+    setClientes(null);
+    setVisitaPendente(null);
+  }
+
+  async function iniciarVisita(clienteId) {
+    const visita = await api.post("/api/visitas", { clienteId });
+    setVisitaPendente(visita);
+    return visita;
+  }
+
+  async function finalizarVisita() {
+    const atualizada = await api.patch(`/api/visitas/${visitaPendente.id}/finalizar`, {});
+    setVisitaPendente(atualizada);
+  }
+
+  // Reflete um PATCH de cliente na lista principal: some da lista se virou
+  // inativo (a lista padrão do backend também exclui), some se voltar a
+  // aparecer (reativado a partir da view de inativos).
+  function atualizarClienteLocal(atualizado) {
+    setClientes((lista) => {
+      if (!lista) return lista;
+      if (atualizado.status === "inativo") {
+        return lista.filter((c) => c.id !== atualizado.id);
+      }
+      const existe = lista.some((c) => c.id === atualizado.id);
+      return existe
+        ? lista.map((c) => (c.id === atualizado.id ? atualizado : c))
+        : [...lista, atualizado];
+    });
+  }
+
+  if (!usuario) return <LoginView aoEntrar={setUsuario} />;
+
+  const abas = usuario.papel === "admin" ? [...ABAS_BASE, "Vínculos", "Usuários"] : ABAS_BASE;
 
   return (
     <div className="app">
@@ -38,27 +99,81 @@ export default function App() {
             )}
           </div>
           <nav className="tabs">
-            {ABAS.map((t) => (
+            {abas.map((t) => (
               <button key={t} className={"tab" + (aba === t ? " active" : "")} onClick={() => setAba(t)}>
                 {t}
               </button>
             ))}
           </nav>
+          <button
+            className="btn-hamburguer"
+            onClick={() => setMenuAberto((v) => !v)}
+            aria-label="Abrir menu"
+            aria-expanded={menuAberto}
+          >
+            <span /><span /><span />
+          </button>
           <div className="nav-right">
-            <span className="muted" style={{ fontSize: 13 }}>
+            <span className="muted nav-contador" style={{ fontSize: 13 }}>
               {clientes ? `${clientes.length.toLocaleString("pt-BR")} clientes` : "carregando…"}
             </span>
+            <span className="muted nav-usuario" style={{ fontSize: 13 }}>· {usuario.nome}</span>
+            <button className="btn-sair" onClick={sair} title="Sair da conta">Sair</button>
           </div>
         </div>
+
+        {menuAberto && (
+          <nav className="tabs-mobile">
+            {abas.map((t) => (
+              <button
+                key={t}
+                className={"tab-mobile" + (aba === t ? " active" : "")}
+                onClick={() => { setAba(t); setMenuAberto(false); }}
+              >
+                {t}
+              </button>
+            ))}
+            <div className="tabs-mobile-rodape muted">{usuario.nome}</div>
+          </nav>
+        )}
       </header>
 
       <main className="conteudo">
         {!clientes ? (
-          <div className="vazio">Carregando carteira…</div>
+          <div className="vazio">
+            {erroCarga ? (
+              <>
+                <p>Não foi possível carregar a carteira.</p>
+                <p className="muted" style={{ fontSize: 13 }}>{erroCarga}</p>
+              </>
+            ) : (
+              "Carregando carteira…"
+            )}
+          </div>
         ) : aba === "Mapa" ? (
-          <MapaView clientes={clientes} />
+          <MapaView
+            clientes={clientes}
+            aoAtualizarCliente={atualizarClienteLocal}
+            visitaPendente={visitaPendente}
+            aoIniciarVisita={iniciarVisita}
+            aoFinalizarVisita={finalizarVisita}
+            usuario={usuario}
+          />
         ) : aba === "Plano da Semana" ? (
           <PlanoView clientes={clientes} />
+        ) : aba === "Rota do Dia" ? (
+          <RotaDiaView
+            aoAtualizarCliente={atualizarClienteLocal}
+            visitaPendente={visitaPendente}
+            aoIniciarVisita={iniciarVisita}
+            aoFinalizarVisita={finalizarVisita}
+            visitasHojeIds={visitasHojeIds}
+            usuario={usuario}
+          />
+        ) : aba === "Vínculos" ? (
+          <SugestoesVinculoView />
+        ) : aba === "Usuários" ? (
+          <UsuariosView usuarioAtual={usuario} />
         ) : (
           <div className="vazio">
             <h3>{aba}</h3>
@@ -66,6 +181,18 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Modal bloqueante: aparece assim que a visita é finalizada e trava
+          o app inteiro até o relatório ser salvo — não tem botão de fechar. */}
+      {visitaPendente?.status === "aguardando_relatorio" && (
+        <RelatorioVisita
+          visita={visitaPendente}
+          aoSalvo={() => {
+            setVisitasHojeIds((s) => new Set(s).add(visitaPendente.clienteId));
+            setVisitaPendente(null);
+          }}
+        />
+      )}
     </div>
   );
 }

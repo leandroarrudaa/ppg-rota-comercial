@@ -9,6 +9,7 @@ html, body, #root { height: 100%; }
   backdrop-filter: saturate(180%) blur(14px);
   border-bottom: 1px solid var(--line);
   z-index: 1000;
+  position: relative;
 }
 .nav-inner { height: 84px; display: flex; align-items: center; gap: 28px; padding: 0 26px; }
 .brand { display: flex; align-items: center; gap: 11px; }
@@ -32,6 +33,27 @@ html, body, #root { height: 100%; }
 .tab:hover { background: var(--surface-2); }
 .tab.active { background: var(--navy); color: #fff; }
 .nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+/* ---------- Menu hambúrguer (só aparece em mobile, ver media query) ---------- */
+.btn-hamburguer {
+  display: none; flex-direction: column; justify-content: center; align-items: center;
+  gap: 4px; width: 40px; height: 40px; border: none; background: transparent;
+  border-radius: var(--r-sm); margin-left: auto;
+}
+.btn-hamburguer:hover { background: var(--surface-2); }
+.btn-hamburguer span { display: block; width: 20px; height: 2px; background: var(--ink); border-radius: 2px; }
+
+.tabs-mobile {
+  display: none; position: absolute; top: 100%; left: 0; right: 0;
+  background: var(--navy-deep); flex-direction: column; padding: 8px;
+  box-shadow: 0 12px 24px rgba(0,0,0,0.25); z-index: 1400;
+}
+.tab-mobile {
+  border: none; background: transparent; color: rgba(255,255,255,0.85); text-align: left;
+  font-size: 1rem; font-weight: 500; padding: 14px 16px; border-radius: var(--r-sm);
+}
+.tab-mobile.active { background: rgba(255,255,255,0.14); color: #fff; font-weight: 700; }
+.tabs-mobile-rodape { padding: 10px 16px 4px; font-size: 0.78rem; color: rgba(255,255,255,0.5) !important; }
 
 /* Conteúdo */
 .conteudo { flex: 1 1 auto; min-height: 0; }
@@ -85,10 +107,10 @@ select.input { cursor: pointer; }
 .input-search { padding-left: 38px; }
 
 /* ---------- Medalhões metálicos (Faixa RFM) ---------- */
-.medais { display: flex; flex-direction: column; gap: 10px; }
+.medais { display: flex; flex-direction: column; gap: 6px; }
 .medal {
-  display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
-  padding: 11px 13px; border-radius: 18px; cursor: pointer; position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  padding: 6px 10px; border-radius: 14px; cursor: pointer; position: relative; overflow: hidden;
   background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.55));
   backdrop-filter: blur(10px) saturate(160%); -webkit-backdrop-filter: blur(10px) saturate(160%);
   border: 1px solid rgba(255,255,255,0.85);
@@ -104,7 +126,7 @@ select.input { cursor: pointer; }
 .medal.off { opacity: .5; filter: grayscale(.55); }
 
 .coin {
-  width: 40px; height: 40px; border-radius: 50%; flex: 0 0 auto; position: relative;
+  width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto; position: relative;
   box-shadow: inset 0 2px 3px rgba(255,255,255,0.7), inset 0 -3px 6px rgba(0,0,0,0.3), 0 3px 7px rgba(0,0,0,0.2);
 }
 .coin::before { content: ""; position: absolute; inset: 5px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.4); }
@@ -113,11 +135,11 @@ select.input { cursor: pointer; }
 .coin-silver { background: linear-gradient(140deg, #fafbfc 0%, #d2d7dc 30%, #aab0b7 56%, #7b8087 100%); }
 .coin-bronze { background: linear-gradient(140deg, #edc59a 0%, #c98f5c 30%, #b4793f 56%, #7d4f25 100%); }
 
-.medal-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.medal-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .medal-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.medal-name { font-family: var(--font-display); font-weight: 700; font-size: 0.98rem; color: var(--ink); }
-.medal-count { font-family: var(--font-display); font-weight: 700; font-size: 1.08rem; color: var(--ink); }
-.medal-bar { height: 5px; border-radius: 999px; background: rgba(22,28,82,0.09); overflow: hidden; }
+.medal-name { font-family: var(--font-display); font-weight: 700; font-size: 0.85rem; color: var(--ink); }
+.medal-count { font-family: var(--font-display); font-weight: 700; font-size: 0.9rem; color: var(--ink); }
+.medal-bar { height: 3px; border-radius: 999px; background: rgba(22,28,82,0.09); overflow: hidden; }
 .medal-bar > i { display: block; height: 100%; border-radius: 999px; transition: width .45s cubic-bezier(.2,.7,.2,1); }
 .fill-gold { background: linear-gradient(90deg, #e3c25a, #c9a227); }
 .fill-silver { background: linear-gradient(90deg, #cfd4d9, #8e949b); }
@@ -125,8 +147,8 @@ select.input { cursor: pointer; }
 
 /* ---------- Card "em risco" ---------- */
 .risco-card {
-  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-  padding: 13px 15px; border-radius: 18px; cursor: pointer; position: relative;
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  padding: 7px 12px; border-radius: 14px; cursor: pointer; position: relative;
   background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(253,236,234,0.7));
   backdrop-filter: blur(10px) saturate(150%); -webkit-backdrop-filter: blur(10px) saturate(150%);
   border: 1px solid rgba(232,84,63,0.22);
@@ -136,12 +158,12 @@ select.input { cursor: pointer; }
 .risco-card:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(232,84,63,0.14); }
 .risco-card.on { border-color: var(--risk); box-shadow: 0 0 0 2px rgba(232,84,63,0.18), 0 10px 22px rgba(232,84,63,0.15); }
 .risco-card:not(.on) { opacity: .8; }
-.risco-pulse { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; background: var(--risk); animation: riscoPulse 2.4s infinite; }
+.risco-pulse { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; background: var(--risk); animation: riscoPulse 2.4s infinite; }
 @keyframes riscoPulse { 0% { box-shadow: 0 0 0 0 rgba(232,84,63,0.45); } 70% { box-shadow: 0 0 0 8px rgba(232,84,63,0); } 100% { box-shadow: 0 0 0 0 rgba(232,84,63,0); } }
-.risco-body { flex: 1; display: flex; flex-direction: column; }
-.risco-label { font-weight: 700; font-size: 0.92rem; color: var(--ink); }
-.risco-sub { font-size: 0.74rem; color: var(--muted); }
-.risco-count { font-family: var(--font-display); font-weight: 700; font-size: 1.2rem; color: var(--risk); }
+.risco-body { flex: 1; display: flex; flex-direction: row; align-items: baseline; gap: 6px; }
+.risco-label { font-weight: 700; font-size: 0.82rem; color: var(--ink); }
+.risco-sub { font-size: 0.7rem; color: var(--muted); }
+.risco-count { font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; color: var(--risk); }
 
 /* card do cliente selecionado */
 .cliente-card {
@@ -315,6 +337,33 @@ select.input { cursor: pointer; }
   .mapa-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .painel { border-right: none; border-bottom: 1px solid var(--line); max-height: 42vh; }
   .tabs { display: none; }
+
+  /* menu hambúrguer substitui as abas escondidas acima */
+  .btn-hamburguer { display: flex; }
+  .tabs-mobile { display: flex; }
+  .nav-inner { padding: 0 14px; gap: 10px; height: 64px; }
+  .brand-logo { height: 38px; }
+  .nav-contador { display: none; } /* "N clientes" some — some espaço, pouco valor em campo */
+  .nav-usuario { display: none; }  /* nome do usuário já aparece no rodapé do menu */
+
+  /* Rota do Dia: colunas antigos/novos empilham (senão ficam espremidas
+     lado a lado numa tela de ~375-428px) */
+  .rota-dia-colunas { flex-direction: column; }
+  .rota-dia-coluna { max-height: 38vh; }
+  .rota-dia-item input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 auto; }
+
+  /* ficha do cliente: formulários em coluna única, mais fáceis de tocar */
+  .ficha-contato { flex-direction: column; }
+  .ficha-contato .input { flex: 1 1 auto !important; }
+  .ficha-status { flex-direction: column; gap: 10px !important; }
+  .ficha-radio { min-height: 32px; }
+
+  /* alvos de toque maiores na tabela de histórico */
+  .ficha-tabela-itens th.ordenavel { padding: 10px 8px; }
+  .ficha-paginacao button { min-height: 40px; padding: 8px 14px; }
+  .vinculo-membros button, .promessa-item button { min-height: 36px; }
+
+  .modal-ficha { padding: 20px; }
 }
 
 /* ============================================================
@@ -390,7 +439,133 @@ select.input { cursor: pointer; }
 
 .painel .rota-lista li:hover, .painel .rota-lista li.aberto { background: rgba(255, 255, 255, 0.08); }
 .painel .rota-nome { color: #fff; }
+.rota-item-visitado { opacity: 0.5; cursor: default; }
+.rota-item-visitado .rota-nome, .painel .rota-item-visitado .rota-nome { text-decoration: line-through; }
+.rota-item-visitado:hover { background: transparent !important; }
 .painel .rota-rec {
   background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.13);
 }
 .painel .rota-rec span { color: rgba(255, 255, 255, 0.78); }
+
+/* ---------- Sair / login ---------- */
+.btn-sair {
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
+  font-size: 0.85rem; font-weight: 500; padding: 0.4rem 0.85rem;
+  border-radius: var(--r-pill); transition: background 0.15s, color 0.15s;
+}
+.btn-sair:hover { background: var(--surface-2); color: var(--ink); }
+
+.login-fundo {
+  height: 100vh; display: grid; place-content: center;
+  background: linear-gradient(160deg, var(--navy-deep), var(--navy));
+}
+.login-card {
+  width: min(360px, 90vw); background: var(--surface); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg); padding: 32px 28px; display: flex; flex-direction: column; gap: 14px;
+}
+.login-logo { height: 40px; width: auto; align-self: center; margin-bottom: 4px; }
+.login-card h2 { font-size: 1.15rem; text-align: center; color: var(--ink); margin: 0; }
+.login-campo { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; color: var(--ink-soft); }
+.login-campo input {
+  border: 1px solid var(--line); border-radius: var(--r-sm); padding: 0.6rem 0.75rem;
+  font-size: 0.95rem; color: var(--ink); background: var(--surface-2);
+}
+.login-campo input:focus { outline: 2px solid var(--navy); outline-offset: 1px; }
+.login-erro {
+  background: var(--risk-bg); color: var(--risk); border-radius: var(--r-sm);
+  padding: 0.55rem 0.75rem; font-size: 0.85rem;
+}
+
+/* ---------- Ficha do cliente (modal) ---------- */
+.modal-fundo {
+  position: fixed; inset: 0; background: rgba(10, 10, 11, 0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 24px;
+}
+.modal-ficha {
+  width: min(640px, 100%); max-height: 90vh; overflow-y: auto; overflow-x: hidden;
+  background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow-lg);
+  padding: 32px; position: relative;
+}
+.modal-fechar {
+  position: absolute; top: 16px; right: 16px; width: 32px; height: 32px;
+  border-radius: 50%; border: 1px solid var(--line); background: var(--surface);
+  font-size: 1.2rem; line-height: 1; color: var(--ink-soft);
+}
+.modal-fechar:hover { background: var(--surface-2); }
+
+.ficha-header h2 { font-size: 1.3rem; margin: 10px 0 2px; color: var(--ink); }
+.ficha-secao { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 8px; }
+.ficha-endereco { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ficha-endereco p { font-size: 0.9rem; color: var(--ink-soft); margin: 0; }
+.ficha-contato { display: flex; gap: 8px; flex-wrap: wrap; }
+.ficha-contato .input { flex: 1 1 160px; }
+.ficha-status { display: flex; gap: 18px; flex-wrap: wrap; }
+.ficha-radio { display: flex; align-items: center; gap: 7px; font-size: 0.88rem; color: var(--ink-soft); cursor: pointer; }
+
+.chip-inativo { background: var(--surface-2); color: var(--faint); }
+.chip-motivo { background: var(--bronze-bg); color: var(--bronze-deep); }
+
+.tabela-scroll { overflow-x: auto; margin-top: 4px; -webkit-overflow-scrolling: touch; }
+.ficha-tabela-itens { width: 100%; min-width: 480px; border-collapse: collapse; font-size: 0.85rem; }
+.ficha-tabela-itens th {
+  text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--faint); padding: 6px 8px; border-bottom: 1px solid var(--line);
+}
+.ficha-tabela-itens td { padding: 7px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-soft); }
+.ficha-tabela-itens td:last-child, .ficha-tabela-itens th:last-child { text-align: right; font-weight: 600; color: var(--ink); }
+.ficha-tabela-itens th.ordenavel { cursor: pointer; user-select: none; white-space: nowrap; }
+.ficha-tabela-itens th.ordenavel:hover { color: var(--ink-soft); }
+.ficha-paginacao { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; }
+
+/* ---------- Promessas pendentes ---------- */
+.promessas-pendentes { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.promessa-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--yellow-bg); border-radius: var(--r-sm); padding: 7px 10px; font-size: 0.85rem; color: var(--ink-soft);
+}
+
+/* ---------- Fluxo de visita bloqueante ---------- */
+.visita-em-andamento {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--risk-bg); color: var(--risk); border: none;
+  border-radius: var(--r-pill); padding: 0.45rem 0.9rem; font-size: 0.85rem; font-weight: 700;
+}
+.visita-em-andamento .risco-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--risk); animation: pulso 1.4s infinite; }
+@keyframes pulso { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.modal-bloqueante { z-index: 3000; }
+.modal-bloqueante .modal-ficha { max-width: 560px; }
+
+/* ---------- Rota do Dia ---------- */
+/* largura fixa da sidebar só faz sentido com tela sobrando — em telas
+   estreitas (media query mobile) ela precisa empilhar igual o .mapa-layout */
+@media (min-width: 821px) {
+  .rota-dia-layout { grid-template-columns: 440px 1fr; }
+}
+.rota-dia-colunas { display: flex; gap: 14px; flex: 1; min-height: 0; }
+.rota-dia-coluna { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.rota-dia-item {
+  display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: var(--r-sm);
+  font-size: 0.83rem; color: rgba(255, 255, 255, 0.85); cursor: pointer; min-height: 40px;
+}
+.rota-dia-item:hover { background: rgba(255, 255, 255, 0.06); }
+.rota-dia-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
+.rota-dia-fat { flex: 0 0 auto; margin-left: auto; padding-left: 6px; font-size: 0.78rem; white-space: nowrap; }
+
+/* ---------- Vínculo de CNPJ (ficha) ---------- */
+.vinculo-membros { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.vinculo-membros li {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 0.85rem; color: var(--ink-soft); padding: 4px 0;
+}
+
+/* ---------- Cadastro manual de cliente novo ---------- */
+.novo-cliente-mapa { height: 260px; border-radius: var(--r-md); overflow: hidden; margin-top: 10px; border: 1px solid var(--line); }
+
+/* ---------- Histórico de visitas (ficha) ---------- */
+.visita-historico-item {
+  border-bottom: 1px solid var(--line-soft); padding: 10px 0; font-size: 0.85rem; color: var(--ink-soft);
+}
+.visita-historico-item:last-child { border-bottom: none; }
+.visita-historico-data { font-weight: 700; color: var(--ink); font-size: 0.8rem; }
+.visita-historico-promessas { margin-top: 4px; font-size: 0.78rem; color: var(--faint); }

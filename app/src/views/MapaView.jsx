@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
 import { FAIXAS, FAIXA_COR, FAIXA_CHIP, FAIXA_DOT, brl, num, recenciaTexto } from "../lib/format";
 import MapAutoSize from "../components/MapAutoSize";
+import FichaCliente from "./FichaCliente";
+import NovoClienteModal from "./NovoClienteModal";
+import { api } from "../lib/api";
 
 const FXKEY = { Ouro: "gold", Prata: "silver", Bronze: "bronze" };
 
@@ -43,29 +46,58 @@ function raio(faixa) {
   return faixa === "Ouro" ? 7.5 : faixa === "Prata" ? 6 : 5;
 }
 
-export default function MapaView({ clientes }) {
+export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente, aoIniciarVisita, aoFinalizarVisita, usuario }) {
   const [faixasOn, setFaixasOn] = useState({ Ouro: true, Prata: true, Bronze: true });
   const [soRisco, setSoRisco] = useState(false);
   const [cidade, setCidade] = useState("Todas");
   const [busca, setBusca] = useState("");
   const [sel, setSel] = useState(null);
+  const [fichaAberta, setFichaAberta] = useState(false);
+  const [novoClienteAberto, setNovoClienteAberto] = useState(false);
+
+  const [incluirInativos, setIncluirInativos] = useState(false);
+  const [clientesInativos, setClientesInativos] = useState(null); // null = ainda não buscou
+
+  useEffect(() => {
+    if (!incluirInativos || clientesInativos !== null) return;
+    api.get("/api/clientes?incluirInativos=true")
+      .then((todos) => setClientesInativos(todos.filter((c) => c.status === "inativo")))
+      .catch(() => setClientesInativos([]));
+  }, [incluirInativos, clientesInativos]);
+
+  const baseClientes = useMemo(
+    () => (incluirInativos && clientesInativos ? [...clientes, ...clientesInativos] : clientes),
+    [clientes, incluirInativos, clientesInativos]
+  );
 
   const cidades = useMemo(() => {
-    const c = [...new Set(clientes.map((d) => d.cidade).filter(Boolean))];
+    const c = [...new Set(baseClientes.map((d) => d.cidade).filter(Boolean))];
     c.sort((a, b) => a.localeCompare(b));
     return ["Todas", ...c];
-  }, [clientes]);
+  }, [baseClientes]);
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    return clientes.filter((d) => {
+    return baseClientes.filter((d) => {
       if (!faixasOn[d.faixa]) return false;
       if (soRisco && !d.emRisco) return false;
       if (cidade !== "Todas" && d.cidade !== cidade) return false;
       if (q && !d.nome.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [clientes, faixasOn, soRisco, cidade, busca]);
+  }, [baseClientes, faixasOn, soRisco, cidade, busca]);
+
+  // reflete a atualização vinda da ficha no card lateral, na lista principal
+  // do App e na lista local de inativos (some/aparece conforme o status novo)
+  function aplicarAtualizacao(atualizado) {
+    setSel(atualizado);
+    aoAtualizarCliente(atualizado);
+    setClientesInativos((lista) => {
+      if (!lista) return lista;
+      const semEsse = lista.filter((c) => c.id !== atualizado.id);
+      return atualizado.status === "inativo" ? [...semEsse, atualizado] : semEsse;
+    });
+  }
 
   const contagem = useMemo(() => {
     const c = { Ouro: 0, Prata: 0, Bronze: 0, risco: 0 };
@@ -98,6 +130,10 @@ export default function MapaView({ clientes }) {
             onChange={(e) => setBusca(e.target.value)}
           />
         </div>
+
+        <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={() => setNovoClienteAberto(true)}>
+          + Cliente novo
+        </button>
 
         <div className="filtro-grupo">
           <span className="filtro-titulo">Faixa RFM</span>
@@ -149,6 +185,15 @@ export default function MapaView({ clientes }) {
           </select>
         </div>
 
+        <label className="ficha-radio" style={{ fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={incluirInativos}
+            onChange={(e) => setIncluirInativos(e.target.checked)}
+          />
+          Considerar inativos
+        </label>
+
         {/* card do cliente selecionado */}
         {sel && (
           <div className="cliente-card">
@@ -157,6 +202,7 @@ export default function MapaView({ clientes }) {
                 <span className={"dot " + FAIXA_DOT[sel.faixa]} /> {sel.faixa}
               </span>
               {sel.emRisco && <span className="chip chip-risk"><span className="dot dot-risk" /> Em risco</span>}
+              {sel.status === "inativo" && <span className="chip chip-inativo">Inativo</span>}
             </div>
             <h4 style={{ marginTop: 12, fontSize: 16 }}>{sel.nome}</h4>
             <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
@@ -164,7 +210,7 @@ export default function MapaView({ clientes }) {
               {sel.cidade}/{sel.uf}
             </p>
             <div className="kv">
-              <div><span>Faturamento</span><b>{brl(sel.fat)}</b></div>
+              <div><span>Faturamento</span><b>{brl(sel.fat)} {sel.temPromessaPendente && <span title="Tem promessa pendente">🎁</span>}</b></div>
               <div><span>Compras</span><b>{num(sel.compras)}</b></div>
               <div><span>Ticket médio</span><b>{brl(sel.ticket)}</b></div>
               <div><span>Última compra</span><b>{recenciaTexto(sel.recencia)}</b></div>
@@ -172,9 +218,28 @@ export default function MapaView({ clientes }) {
               {sel.porte && <div><span>Porte</span><b>{sel.porte}</b></div>}
               <div><span>Score RFM</span><b>{sel.score} <small className="faint">(R{sel.R} F{sel.F} M{sel.M})</small></b></div>
             </div>
+            <button
+              className="btn btn-primary"
+              style={{ width: "100%", justifyContent: "center", marginTop: 12 }}
+              onClick={() => setFichaAberta(true)}
+            >
+              Ver ficha completa
+            </button>
           </div>
         )}
       </aside>
+
+      {fichaAberta && sel && (
+        <FichaCliente
+          cliente={sel}
+          aoFechar={() => setFichaAberta(false)}
+          aoAtualizar={aplicarAtualizacao}
+          visitaPendente={visitaPendente}
+          aoIniciarVisita={aoIniciarVisita}
+          aoFinalizarVisita={aoFinalizarVisita}
+          usuario={usuario}
+        />
+      )}
 
       {/* ---------- MAPA ---------- */}
       <div className="mapa-wrap">
@@ -199,20 +264,27 @@ export default function MapaView({ clientes }) {
               pathOptions={{
                 color: d.emRisco ? "#e8543f" : "#ffffff",
                 weight: d.emRisco ? 2 : 1.2,
-                fillColor: FAIXA_COR[d.faixa],
-                fillOpacity: 0.92,
+                fillColor: d.status === "inativo" ? "#9aa0a6" : FAIXA_COR[d.faixa],
+                fillOpacity: d.status === "inativo" ? 0.5 : 0.92,
               }}
               eventHandlers={{ click: () => setSel(d) }}
             >
               <Popup>
                 <b>{d.nome}</b>
                 <br />
-                {d.faixa}{d.emRisco ? " · em risco" : ""} · {brl(d.fat)}
+                {d.status === "inativo" ? "Inativo · " : ""}{d.faixa}{d.emRisco ? " · em risco" : ""} · {brl(d.fat)}
               </Popup>
             </CircleMarker>
           ))}
         </MapContainer>
       </div>
+
+      {novoClienteAberto && (
+        <NovoClienteModal
+          aoFechar={() => setNovoClienteAberto(false)}
+          aoCriado={(novo) => { aoAtualizarCliente(novo); setSel(novo); }}
+        />
+      )}
     </div>
   );
 }

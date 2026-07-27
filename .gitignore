@@ -12,3 +12,11 @@ saida/*.txt
 
 # sistema
 .DS_Store
+
+# backend
+backend/.venv/
+backend/rota.db
+backend/.env
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.pytest_cache/
