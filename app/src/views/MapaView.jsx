@@ -54,6 +54,9 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
   const [sel, setSel] = useState(null);
   const [fichaAberta, setFichaAberta] = useState(false);
   const [novoClienteAberto, setNovoClienteAberto] = useState(false);
+  // Só importa em telas pequenas (a media query decide se o botão aparece):
+  // no mobile painel e mapa não cabem juntos, então alterna qual ocupa a tela.
+  const [modoMobile, setModoMobile] = useState("mapa");
 
   const [incluirInativos, setIncluirInativos] = useState(false);
   const [clientesInativos, setClientesInativos] = useState(null); // null = ainda não buscou
@@ -109,7 +112,18 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
   }, [filtrados]);
 
   return (
-    <div className="mapa-layout">
+    <div className={"mapa-layout" + (modoMobile === "mapa" ? " modo-mapa-mobile" : " modo-painel-mobile")}>
+      {/* Só visível em telas pequenas (media query) — no mobile painel e mapa
+          não cabem juntos numa altura usável, então cada um ocupa a tela
+          inteira por vez, com esse botão pra alternar entre os dois. */}
+      <button
+        type="button"
+        className="btn-alternar-mobile"
+        onClick={() => setModoMobile((m) => (m === "mapa" ? "painel" : "mapa"))}
+      >
+        {modoMobile === "mapa" ? "☰ Ver filtros" : "🗺️ Ver mapa"}
+      </button>
+
       {/* ---------- PAINEL LATERAL ---------- */}
       <aside className="painel">
         <div className="painel-head">
@@ -267,7 +281,7 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
                 fillColor: d.status === "inativo" ? "#9aa0a6" : FAIXA_COR[d.faixa],
                 fillOpacity: d.status === "inativo" ? 0.5 : 0.92,
               }}
-              eventHandlers={{ click: () => setSel(d) }}
+              eventHandlers={{ click: () => { setSel(d); setModoMobile("painel"); } }}
             >
               <Popup>
                 <b>{d.nome}</b>

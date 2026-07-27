@@ -60,6 +60,9 @@ html, body, #root { height: 100%; }
 .tab-mobile.active { background: rgba(255,255,255,0.14); color: #fff; font-weight: 700; }
 .tabs-mobile-rodape { padding: 10px 16px 4px; font-size: 0.78rem; color: rgba(255,255,255,0.5) !important; }
 
+/* alterna painel/mapa em tela cheia no mobile — ver media query */
+.btn-alternar-mobile { display: none; }
+
 /* Conteúdo */
 .conteudo { flex: 1 1 auto; min-height: 0; }
 .vazio { height: 100%; display: grid; place-content: center; text-align: center; gap: 6px; color: var(--ink-soft); }
@@ -73,7 +76,10 @@ html, body, #root { height: 100%; }
     linear-gradient(168deg, #0d1234 0%, #161e4d 48%, #243083 100%);
   color: rgba(255, 255, 255, 0.85);
   padding: 22px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px;
-  position: relative; z-index: 1100;
+  /* precisa ficar ABAIXO do z-index:1000 do .nav (cabeçalho) — senão o painel
+     (que fica opaco e ocupa boa parte da tela no mobile) pinta por cima do
+     menu hambúrguer aberto, escondendo-o mesmo continuando "aberto" no DOM. */
+  position: relative; z-index: 1;
   box-shadow: 14px 0 30px rgba(8, 11, 38, 0.42);
 }
 .painel-head h3 { font-size: 1.32rem; letter-spacing: -0.02em; color: #fff; }
@@ -342,6 +348,20 @@ select.input { cursor: pointer; }
   .mapa-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .painel { border-right: none; border-bottom: 1px solid var(--line); max-height: 42vh; }
   .tabs { display: none; }
+
+  /* Alterna painel/mapa em tela cheia — no mobile os dois espremidos juntos
+     ficam pequenos demais pra usar (filtro ilegível, mapa minúsculo). */
+  .btn-alternar-mobile {
+    display: block; position: fixed; bottom: 18px; right: 18px; z-index: 1200;
+    background: var(--navy); color: #fff; border: none; border-radius: 999px;
+    padding: 12px 18px; font-weight: 600; font-size: 0.85rem;
+    box-shadow: 0 6px 18px rgba(8, 11, 38, 0.4);
+  }
+  .modo-mapa-mobile .painel { display: none; }
+  .modo-mapa-mobile { grid-template-rows: 1fr; }
+  .modo-painel-mobile .mapa-wrap { display: none; }
+  .modo-painel-mobile .painel { max-height: none; flex: 1; }
+  .modo-painel-mobile { grid-template-rows: 1fr; }
 
   /* menu hambúrguer substitui as abas escondidas acima */
   .btn-hamburguer { display: flex; }
