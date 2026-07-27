@@ -1,0 +1,37 @@
+services:
+  # API (FastAPI) — a mesma DATABASE_URL do Supabase entra pelo dashboard do
+  # Render (não fica no yaml, "sync: false" só reserva a variável).
+  - type: web
+    name: ppg-rota-comercial-backend
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/saude
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: TOKEN_DIAS
+        value: "60"
+      - key: CORS_ORIGEM_EXTRA
+        value: https://ppg-rota-comercial.onrender.com
+
+  # Frontend (Vite/React), servido como site estático — serviço separado do
+  # backend porque este app não é servido pelo FastAPI (diferente do gado_app).
+  - type: web
+    name: ppg-rota-comercial
+    runtime: static
+    plan: free
+    rootDir: app
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    routes:
+      - path: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://ppg-rota-comercial-backend.onrender.com
