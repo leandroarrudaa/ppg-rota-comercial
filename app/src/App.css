@@ -1,6 +1,11 @@
 /* ---------- App shell (ferramenta full-height) ---------- */
 html, body, #root { height: 100%; }
-.app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+/* 100dvh (não 100vh): no Safari mobile, 100vh é calculado contra a barra de
+   endereço RECOLHIDA — com a barra visível (estado padrão ao abrir a página),
+   o conteúdo real fica mais alto que a tela visível e, com overflow:hidden,
+   a parte de baixo (mapa, itens do menu) fica cortada e inacessível, sem
+   scroll nenhum revelar. 100dvh acompanha a barra de endereço dinamicamente. */
+.app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
 
 /* Header */
 .nav {
@@ -456,7 +461,7 @@ select.input { cursor: pointer; }
 .btn-sair:hover { background: var(--surface-2); color: var(--ink); }
 
 .login-fundo {
-  height: 100vh; display: grid; place-content: center;
+  height: 100vh; height: 100dvh; display: grid; place-content: center;
   background: linear-gradient(160deg, var(--navy-deep), var(--navy));
 }
 .login-card {
