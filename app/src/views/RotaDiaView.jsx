@@ -13,7 +13,7 @@ const FXKEY = { Ouro: "gold", Prata: "silver", Bronze: "bronze" };
 // é o "raio de seleção" da Rota do Dia: o que está visível na tela, não um
 // círculo geométrica (decisão explícita do usuário) — a busca por nome,
 // porém, vale pra carteira inteira (decisão explícita separada).
-function ObservarViewport({ aoMudar }) {
+function ObservarViewport({ aoMudar, visivel }) {
   const map = useMapEvents({
     moveend: () => reportar(),
     zoomend: () => reportar(),
@@ -23,6 +23,15 @@ function ObservarViewport({ aoMudar }) {
     aoMudar([b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]);
   }
   useEffect(() => { reportar(); }, []); // primeira leitura ao montar
+  // No mobile o mapa pode começar escondido (modo filtro) e só ganhar
+  // tamanho real quando o usuário troca pra "Ver mapa" — sem isso, os
+  // limites lidos no mount são de um container 0x0 e a busca por bbox
+  // nunca acha ninguém. Revalida toda vez que ele fica visível de novo.
+  useEffect(() => {
+    if (!visivel) return;
+    const t = setTimeout(() => { map.invalidateSize(); reportar(); }, 260);
+    return () => clearTimeout(t);
+  }, [visivel]);
   return null;
 }
 
@@ -68,8 +77,10 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
   const [fichaAberta, setFichaAberta] = useState(null); // cliente selecionado, ou null
   const [finalizando, setFinalizando] = useState(false);
   // Só importa em telas pequenas: no mobile painel e mapa não cabem juntos,
-  // então alterna qual ocupa a tela. Começa em "painel" (filtro).
-  const [modoMobile, setModoMobile] = useState("painel");
+  // então alterna qual ocupa a tela. Diferente do Mapa (que começa no
+  // filtro): aqui a lista de clientes DEPENDE da área visível do mapa, então
+  // precisa começar com o mapa visível — senão abre sempre zerado.
+  const [modoMobile, setModoMobile] = useState("mapa");
   const mapRef = useRef(null);
   const bboxAtualRef = useRef(null);
 
@@ -410,7 +421,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
         <MapContainer ref={mapRef} center={[-25.095, -50.16]} zoom={12} preferCanvas style={{ height: "100%", width: "100%" }}>
           <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap &copy; CARTO" subdomains="abcd" />
           <MapAutoSize />
-          <ObservarViewport aoMudar={setBbox} />
+          <ObservarViewport aoMudar={setBbox} visivel={modoMobile === "mapa"} />
           {bboxFiltrado.map((c) => (
             <Marker
               key={c.id}
