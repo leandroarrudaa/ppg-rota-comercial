@@ -14,11 +14,22 @@ const FXKEY = { Ouro: "gold", Prata: "silver", Bronze: "bronze" };
 // círculo geométrica (decisão explícita do usuário) — a busca por nome,
 // porém, vale pra carteira inteira (decisão explícita separada).
 function ObservarViewport({ aoMudar, visivel }) {
+  // ref (não state) pra sempre ler o valor mais recente dentro dos handlers
+  // do Leaflet, que não são recriados a cada render.
+  const visivelRef = useRef(visivel);
+  useEffect(() => { visivelRef.current = visivel; }, [visivel]);
+
   const map = useMapEvents({
     moveend: () => reportar(),
     zoomend: () => reportar(),
   });
   function reportar() {
+    // com o mapa escondido (modo filtro no mobile) o container fica 0x0 —
+    // um resize da janela (ex.: teclado abrindo pra digitar um filtro) pode
+    // disparar invalidateSize/moveend mesmo assim, lendo limites inválidos e
+    // zerando a lista bem na hora em que o usuário mexe num filtro. Ignora
+    // qualquer leitura de limites enquanto o mapa não está de fato visível.
+    if (!visivelRef.current) return;
     const b = map.getBounds();
     aoMudar([b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]);
   }
@@ -26,9 +37,13 @@ function ObservarViewport({ aoMudar, visivel }) {
   // No mobile o mapa pode começar escondido (modo filtro) e só ganhar
   // tamanho real quando o usuário troca pra "Ver mapa" — sem isso, os
   // limites lidos no mount são de um container 0x0 e a busca por bbox
-  // nunca acha ninguém. Revalida toda vez que ele fica visível de novo.
+  // nunca acha ninguém. Revalida toda vez que ele fica visível de novo —
+  // mas não na primeira vez (o efeito de mount logo acima já cobre isso;
+  // sem esse guard, toda tela abria disparando 2 buscas idênticas em vez de 1).
+  const primeiraVezRef = useRef(true);
   useEffect(() => {
     if (!visivel) return;
+    if (primeiraVezRef.current) { primeiraVezRef.current = false; return; }
     const t = setTimeout(() => { map.invalidateSize(); reportar(); }, 260);
     return () => clearTimeout(t);
   }, [visivel]);
@@ -68,6 +83,11 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
   const [faixasOn, setFaixasOn] = useState({ Ouro: true, Prata: true, Bronze: true });
   const [soRisco, setSoRisco] = useState(false);
   const [faturamentoMin, setFaturamentoMin] = useState(0);
+  // Só importa no mobile (CSS): faturamento/faixa/risco recolhidos por
+  // padrão pra sobrar mais espaço de tela pra lista de clientes, que é o
+  // que se usa o tempo todo — no desktop esses filtros continuam sempre
+  // visíveis, independente desse estado.
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
 
   const [selecionados, setSelecionados] = useState(() => new Set());
   const [conhecidos, setConhecidos] = useState(() => new Map()); // id -> cliente, acumulado de bbox+busca
@@ -329,59 +349,69 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
           />
         </div>
 
-        <div className="filtro-grupo">
-          <span className="filtro-titulo">Faturamento mínimo</span>
-          <input
-            className="input"
-            type="number"
-            min="0"
-            step="1000"
-            placeholder="Ex: 30000"
-            value={faturamentoMin || ""}
-            onChange={(e) => setFaturamentoMin(Number(e.target.value) || 0)}
-          />
-          {faturamentoMin > 0 && (
-            <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-              Só clientes antigos com faturamento acima de {brl(faturamentoMin)}
-            </p>
-          )}
-        </div>
-
-        <div className="filtro-grupo">
-          <span className="filtro-titulo">Faixa RFM</span>
-          <div className="medais">
-            {FAIXAS.map((f) => {
-              const k = FXKEY[f];
-              return (
-                <button
-                  key={f}
-                  className={"medal medal-" + k + (faixasOn[f] ? "" : " off")}
-                  onClick={() => setFaixasOn((s) => ({ ...s, [f]: !s[f] }))}
-                  aria-pressed={faixasOn[f]}
-                >
-                  <span className={"coin coin-" + k} />
-                  <span className="medal-body">
-                    <span className="medal-top">
-                      <span className="medal-name">{f}</span>
-                      <span className="medal-count">{num(antigos.filter((c) => c.faixa === f).length)}</span>
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         <button
-          className={"risco-card" + (soRisco ? " on" : "")}
-          onClick={() => setSoRisco((v) => !v)}
-          aria-pressed={soRisco}
+          type="button"
+          className="btn-toggle-filtros"
+          onClick={() => setFiltrosAbertos((v) => !v)}
         >
-          <span className="risco-pulse" />
-          <span className="risco-body">
-            <span className="risco-label">Só clientes em risco</span>
-          </span>
+          {filtrosAbertos ? "▲ Menos filtros" : "▾ Mais filtros (faturamento, faixa, risco)"}
         </button>
+
+        <div className={"rota-dia-filtros-extra" + (filtrosAbertos ? " aberto" : "")}>
+          <div className="filtro-grupo">
+            <span className="filtro-titulo">Faturamento mínimo</span>
+            <input
+              className="input"
+              type="number"
+              min="0"
+              step="1000"
+              placeholder="Ex: 30000"
+              value={faturamentoMin || ""}
+              onChange={(e) => setFaturamentoMin(Number(e.target.value) || 0)}
+            />
+            {faturamentoMin > 0 && (
+              <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                Só clientes antigos com faturamento acima de {brl(faturamentoMin)}
+              </p>
+            )}
+          </div>
+
+          <div className="filtro-grupo">
+            <span className="filtro-titulo">Faixa RFM</span>
+            <div className="medais">
+              {FAIXAS.map((f) => {
+                const k = FXKEY[f];
+                return (
+                  <button
+                    key={f}
+                    className={"medal medal-" + k + (faixasOn[f] ? "" : " off")}
+                    onClick={() => setFaixasOn((s) => ({ ...s, [f]: !s[f] }))}
+                    aria-pressed={faixasOn[f]}
+                  >
+                    <span className={"coin coin-" + k} />
+                    <span className="medal-body">
+                      <span className="medal-top">
+                        <span className="medal-name">{f}</span>
+                        <span className="medal-count">{num(antigos.filter((c) => c.faixa === f).length)}</span>
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <button
+            className={"risco-card" + (soRisco ? " on" : "")}
+            onClick={() => setSoRisco((v) => !v)}
+            aria-pressed={soRisco}
+          >
+            <span className="risco-pulse" />
+            <span className="risco-body">
+              <span className="risco-label">Só clientes em risco</span>
+            </span>
+          </button>
+        </div>
 
         <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} disabled={selecionados.size === 0} onClick={gerarRota}>
           Gerar rota ({selecionados.size})

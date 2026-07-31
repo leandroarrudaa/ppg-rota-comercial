@@ -9,7 +9,14 @@ import { useMap } from "react-leaflet";
 export default function MapAutoSize() {
   const map = useMap();
   useEffect(() => {
-    const fix = () => map.invalidateSize();
+    // se o container estiver escondido (display:none — ex.: modo "filtro" no
+    // mobile, com o mapa fora de tela), o tamanho é 0x0; recalcular nesse
+    // estado corrompe a posição interna do Leaflet (dispara moveend com
+    // limites inválidos) — ignora até o container ter tamanho de verdade.
+    const fix = () => {
+      const { width, height } = map.getContainer().getBoundingClientRect();
+      if (width > 0 && height > 0) map.invalidateSize();
+    };
     const t1 = setTimeout(fix, 0);
     const t2 = setTimeout(fix, 250);
     const ro = new ResizeObserver(fix);

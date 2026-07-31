@@ -97,6 +97,12 @@ select.input { cursor: pointer; }
 .filtro-titulo { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); }
 .filtro-faixas { display: flex; flex-direction: column; gap: 6px; }
 
+/* Rota do Dia: filtros secundários (faturamento/faixa/risco) — recolhidos
+   por padrão só no mobile (ver media query), pra sobrar espaço de tela pra
+   lista de clientes. No desktop sempre aparecem, sem botão de alternar. */
+.btn-toggle-filtros { display: none; }
+.rota-dia-filtros-extra { display: flex; flex-direction: column; gap: 18px; }
+
 .toggle {
   display: flex; align-items: center; gap: 8px; width: 100%;
   border: 1px solid var(--line); background: var(--surface);
@@ -372,10 +378,24 @@ select.input { cursor: pointer; }
   .nav-usuario { display: none; }  /* nome do usuário já aparece no rodapé do menu */
 
   /* Rota do Dia: colunas antigos/novos empilham (senão ficam espremidas
-     lado a lado numa tela de ~375-428px) */
+     lado a lado numa tela de ~375-428px). Sem altura fixa em vh — cada
+     coluna usa flex:1 (já definido na regra base) pra ocupar o que sobrar
+     de verdade do painel, que agora fica em tela cheia no modo "filtro". */
   .rota-dia-colunas { flex-direction: column; }
-  .rota-dia-coluna { max-height: 38vh; }
+  .rota-dia-coluna { min-height: 120px; }
   .rota-dia-item input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 auto; }
+
+  /* filtros secundários (faturamento/faixa/risco) recolhidos por padrão —
+     deixa search + lista + "Gerar rota" sempre visíveis, que é o que se
+     usa o tempo todo; o resto fica atrás do botão "Mais filtros". */
+  .btn-toggle-filtros {
+    display: block; width: 100%; text-align: left; cursor: pointer;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+    color: #fff; border-radius: var(--r-sm); padding: 10px 14px;
+    font-size: 0.85rem; font-weight: 600;
+  }
+  .rota-dia-filtros-extra { display: none; }
+  .rota-dia-filtros-extra.aberto { display: flex; }
 
   /* ficha do cliente: formulários em coluna única, mais fáceis de tocar */
   .ficha-contato { flex-direction: column; }
