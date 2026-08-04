@@ -9,6 +9,16 @@ import FichaCliente from "./FichaCliente";
 
 const FXKEY = { Ouro: "gold", Prata: "silver", Bronze: "bronze" };
 
+// Cache FORA do componente (module scope): sobrevive a trocar de aba e
+// voltar — o React desmonta a RotaDiaView inteira ao trocar de aba,
+// perdendo todo o estado, e sem isso o vendedor via a tela recomeçar do
+// zero (mapa voltando pro centro padrão, lista vazia até nova busca) toda
+// vez que saía e voltava, mesmo sem nada ter mudado.
+let cacheCentro = [-25.095, -50.16];
+let cacheZoom = 12;
+let cacheUltimoBbox = null;
+let cacheCandidatosBbox = [];
+
 // Observa o viewport do mapa (pan/zoom) e reporta o bbox atual pro pai —
 // é o "raio de seleção" da Rota do Dia: o que está visível na tela, não um
 // círculo geométrica (decisão explícita do usuário) — a busca por nome,
@@ -32,6 +42,11 @@ function ObservarViewport({ aoMudar, visivel }) {
     if (!visivelRef.current) return;
     const b = map.getBounds();
     aoMudar([b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]);
+    // lembra onde o usuário estava — reaproveitado como centro inicial do
+    // mapa se ele sair da aba e voltar (ver cacheCentro/cacheZoom acima).
+    const centro = map.getCenter();
+    cacheCentro = [centro.lat, centro.lng];
+    cacheZoom = map.getZoom();
   }
   useEffect(() => { reportar(); }, []); // primeira leitura ao montar
   // No mobile o mapa pode começar escondido (modo filtro) e só ganhar
@@ -72,8 +87,8 @@ function FitRota({ pontos }) {
 }
 
 export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoIniciarVisita, aoFinalizarVisita, visitasHojeIds, usuario }) {
-  const [bbox, setBbox] = useState(null);
-  const [candidatosBbox, setCandidatosBbox] = useState([]);
+  const [bbox, setBbox] = useState(cacheUltimoBbox);
+  const [candidatosBbox, setCandidatosBbox] = useState(cacheCandidatosBbox);
   const [carregando, setCarregando] = useState(false);
 
   const [buscaTexto, setBuscaTexto] = useState("");
@@ -127,7 +142,12 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
     const meuBbox = bbox;
     const [minLat, minLng, maxLat, maxLng] = bbox;
     api.get(`/api/clientes?bbox=${minLat},${minLng},${maxLat},${maxLng}`)
-      .then((dados) => { if (bboxAtualRef.current === meuBbox) setCandidatosBbox(dados); })
+      .then((dados) => {
+        if (bboxAtualRef.current !== meuBbox) return;
+        setCandidatosBbox(dados);
+        cacheUltimoBbox = meuBbox;
+        cacheCandidatosBbox = dados;
+      })
       .catch(() => { if (bboxAtualRef.current === meuBbox) setCandidatosBbox([]); })
       .finally(() => { if (bboxAtualRef.current === meuBbox) setCarregando(false); });
   }, [bbox]);
@@ -448,7 +468,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
       </aside>
 
       <div className="mapa-wrap">
-        <MapContainer ref={mapRef} center={[-25.095, -50.16]} zoom={12} preferCanvas style={{ height: "100%", width: "100%" }}>
+        <MapContainer ref={mapRef} center={cacheCentro} zoom={cacheZoom} preferCanvas style={{ height: "100%", width: "100%" }}>
           <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap &copy; CARTO" subdomains="abcd" />
           <MapAutoSize />
           <ObservarViewport aoMudar={setBbox} visivel={modoMobile === "mapa"} />
