@@ -291,7 +291,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
                   <li
                     key={c.id}
                     className={"rota-item" + (jaVisitado ? " rota-item-visitado" : "")}
-                    onClick={() => !emAndamento && abrirFicha(c)}
+                    onClick={() => abrirFicha(c)}
                   >
                     <span className="ordem-num" style={{ background: FAIXA_COR[c.faixa] || "#8e949b" }}>{i + 1}</span>
                     <div className="rota-info">
