@@ -24,3 +24,6 @@ backend/.pytest_cache/
 # frontend
 app/.env
 app/.vite/
+
+# exports com dados sensíveis de cliente, gerados sob demanda
+clientes_sem_endereco.csv

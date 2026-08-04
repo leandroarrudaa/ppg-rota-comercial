@@ -33,13 +33,13 @@ def log(msg):
 
 def load_cache():
     if os.path.exists(CACHE):
-        with open(CACHE) as f:
+        with open(CACHE, encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 
 def save_cache(c):
-    with open(CACHE, "w") as f:
+    with open(CACHE, "w", encoding="utf-8") as f:
         json.dump(c, f, ensure_ascii=False)
 
 
