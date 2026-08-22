@@ -5,11 +5,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from .config import config
-from .database import Base, checar_conexao, engine
+from .database import Base, checar_conexao, engine, garantir_indices
 from .routers import auth, clientes, vinculos, visitas
 
 log = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ async def lifespan(_app: FastAPI):
     """
     try:
         await asyncio.to_thread(Base.metadata.create_all, engine)
+        await asyncio.to_thread(garantir_indices)
     except SQLAlchemyError:
         log.exception("Não foi possível preparar o esquema — app sobe mesmo assim")
 
@@ -66,6 +68,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# A carteira inteira dá ~1 MB de JSON, e o vendedor baixa isso no 4G. Comprimida
+# cai para ~1/7 do tamanho. Só vale a pena a partir de alguns KB — abaixo disso
+# o custo de comprimir supera a economia.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
 @app.exception_handler(SQLAlchemyError)

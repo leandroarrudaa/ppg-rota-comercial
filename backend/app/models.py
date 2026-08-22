@@ -11,6 +11,7 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -125,6 +126,15 @@ class Cliente(Base):
     criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     atualizado_em: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    # Índices das colunas que a listagem filtra. O caso mais comum, de longe, é
+    # a Rota do Dia pedindo "quem está visível no mapa e pode receber visita" —
+    # daí o índice composto de status + aceita_visita + coordenadas.
+    __table_args__ = (
+        Index("ix_clientes_listagem", "status", "aceita_visita", "lat", "lng"),
+        Index("ix_clientes_cidade", "cidade"),
+        Index("ix_clientes_faixa", "faixa"),
     )
 
 

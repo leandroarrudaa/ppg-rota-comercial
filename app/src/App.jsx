@@ -1,14 +1,19 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
-import MapaView from "./views/MapaView";
-import PlanoView from "./views/PlanoView";
 import LoginView from "./views/LoginView";
-import RelatorioVisita from "./views/RelatorioVisita";
-import RotaDiaView from "./views/RotaDiaView";
-import SugestoesVinculoView from "./views/SugestoesVinculoView";
-import UsuariosView from "./views/UsuariosView";
 import { api, limparSessao, registrarAoExpirar, tokenSalvo, usuarioSalvo } from "./lib/api";
+
+// Cada aba é baixada só quando aberta pela primeira vez. Antes, tudo vinha num
+// pacote único de ~795 KB — incluindo a biblioteca de PDF, usada apenas no
+// "Plano da Semana", que o vendedor pode nunca abrir. O login (tela que todo
+// mundo vê primeiro) fica fora disso de propósito, para aparecer na hora.
+const MapaView = lazy(() => import("./views/MapaView"));
+const PlanoView = lazy(() => import("./views/PlanoView"));
+const RotaDiaView = lazy(() => import("./views/RotaDiaView"));
+const SugestoesVinculoView = lazy(() => import("./views/SugestoesVinculoView"));
+const UsuariosView = lazy(() => import("./views/UsuariosView"));
+const RelatorioVisita = lazy(() => import("./views/RelatorioVisita"));
 
 const ABAS_BASE = ["Mapa", "Plano da Semana", "Rota do Dia", "Carteira"];
 
@@ -139,6 +144,7 @@ export default function App() {
       </header>
 
       <main className="conteudo">
+        <Suspense fallback={<div className="vazio">Carregando…</div>}>
         {!clientes ? (
           <div className="vazio">
             {erroCarga ? (
@@ -180,18 +186,21 @@ export default function App() {
             <p className="muted">Em construção — próxima etapa.</p>
           </div>
         )}
+        </Suspense>
       </main>
 
       {/* Modal bloqueante: aparece assim que a visita é finalizada e trava
           o app inteiro até o relatório ser salvo — não tem botão de fechar. */}
       {visitaPendente?.status === "aguardando_relatorio" && (
-        <RelatorioVisita
-          visita={visitaPendente}
-          aoSalvo={() => {
-            setVisitasHojeIds((s) => new Set(s).add(visitaPendente.clienteId));
-            setVisitaPendente(null);
-          }}
-        />
+        <Suspense fallback={null}>
+          <RelatorioVisita
+            visita={visitaPendente}
+            aoSalvo={() => {
+              setVisitasHojeIds((s) => new Set(s).add(visitaPendente.clienteId));
+              setVisitaPendente(null);
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );

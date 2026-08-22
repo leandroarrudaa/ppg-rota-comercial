@@ -58,6 +58,24 @@ def get_db():
         db.close()
 
 
+def garantir_indices() -> None:
+    """Cria os índices da listagem em bancos que já existem.
+
+    `create_all` só cria tabelas ausentes — em tabela que já existe (o caso de
+    produção) ele não acrescenta índice nenhum. Como o projeto não usa Alembic,
+    o jeito mais simples e seguro é este DDL idempotente: roda toda vez, não
+    faz nada se o índice já estiver lá, e é instantâneo neste volume de dados.
+    """
+    comandos = [
+        "CREATE INDEX IF NOT EXISTS ix_clientes_listagem ON clientes (status, aceita_visita, lat, lng)",
+        "CREATE INDEX IF NOT EXISTS ix_clientes_cidade ON clientes (cidade)",
+        "CREATE INDEX IF NOT EXISTS ix_clientes_faixa ON clientes (faixa)",
+    ]
+    with engine.begin() as conexao:
+        for comando in comandos:
+            conexao.execute(text(comando))
+
+
 def checar_conexao() -> bool:
     """Faz um toque leve no banco. Usado pelo diagnóstico e pelo keep-alive
     que impede o Supabase gratuito de pausar por inatividade."""
