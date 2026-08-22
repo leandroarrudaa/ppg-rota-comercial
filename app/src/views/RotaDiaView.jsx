@@ -141,15 +141,21 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
     bboxAtualRef.current = bbox;
     const meuBbox = bbox;
     const [minLat, minLng, maxLat, maxLng] = bbox;
-    api.get(`/api/clientes?bbox=${minLat},${minLng},${maxLat},${maxLng}`)
-      .then((dados) => {
-        if (bboxAtualRef.current !== meuBbox) return;
-        setCandidatosBbox(dados);
-        cacheUltimoBbox = meuBbox;
-        cacheCandidatosBbox = dados;
-      })
-      .catch(() => { if (bboxAtualRef.current === meuBbox) setCandidatosBbox([]); })
-      .finally(() => { if (bboxAtualRef.current === meuBbox) setCarregando(false); });
+    // Espera o dedo parar antes de consultar. Um único arraste do mapa emite
+    // vários moveend/zoomend; sem essa pausa, cada um virava uma requisição
+    // completa (e o servidor está nos EUA — são ~120ms de viagem cada uma).
+    const timer = setTimeout(() => {
+      api.get(`/api/clientes?bbox=${minLat},${minLng},${maxLat},${maxLng}`)
+        .then((dados) => {
+          if (bboxAtualRef.current !== meuBbox) return;
+          setCandidatosBbox(dados);
+          cacheUltimoBbox = meuBbox;
+          cacheCandidatosBbox = dados;
+        })
+        .catch(() => { if (bboxAtualRef.current === meuBbox) setCandidatosBbox([]); })
+        .finally(() => { if (bboxAtualRef.current === meuBbox) setCarregando(false); });
+    }, 400);
+    return () => clearTimeout(timer);
   }, [bbox]);
 
   // busca — carteira inteira, independente do que está visível no mapa
