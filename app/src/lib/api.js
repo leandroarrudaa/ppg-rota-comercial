@@ -35,16 +35,29 @@ export function registrarAoExpirar(fn) {
   aoExpirar = fn;
 }
 
+// Teto de espera por resposta. Sem isso, um servidor pendurado (banco pausado,
+// serviço religando) deixa a tela em "Carregando…" para sempre — era o que o
+// vendedor via em campo, sem nenhuma pista do que estava acontecendo.
+const TIMEOUT_MS = 20_000;
+
 async function chamar(caminho, opcoes = {}) {
   const headers = { "Content-Type": "application/json", ...(opcoes.headers || {}) };
   const token = tokenSalvo();
   if (token) headers.Authorization = `Bearer ${token}`;
 
+  const abortar = new AbortController();
+  const relogio = setTimeout(() => abortar.abort(), TIMEOUT_MS);
+
   let resp;
   try {
-    resp = await fetch(`${BASE}${caminho}`, { ...opcoes, headers });
-  } catch {
+    resp = await fetch(`${BASE}${caminho}`, { ...opcoes, headers, signal: abortar.signal });
+  } catch (erro) {
+    if (erro.name === "AbortError") {
+      throw new Error("O servidor demorou demais para responder. Tente de novo em instantes.");
+    }
     throw new Error("Sem conexão com o servidor. Verifique sua internet.");
+  } finally {
+    clearTimeout(relogio);
   }
 
   // 401 do próprio login/setup é "usuário ou senha incorretos", não sessão
