@@ -7,13 +7,13 @@ from __future__ import annotations
 import difflib
 import re
 from collections import defaultdict
-from datetime import datetime
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ..models import Cliente, ClienteMestre, StatusCliente, StatusSugestaoVinculo, SugestaoVinculo
 from ..schemas import ClienteMestreOut, ClienteResumo, SugestaoVinculoOut
+from .tempo import agora_utc
 
 SUFIXOS_SOCIETARIOS = {"LTDA", "ME", "EPP", "EIRELI", "SA", "S", "A", "MEI"}
 LIMIAR_SIMILARIDADE = 0.82
@@ -153,7 +153,7 @@ def resolver_sugestao(db: Session, sugestao_id: int, aceitar: bool):
         s.status = StatusSugestaoVinculo.ACEITO
     else:
         s.status = StatusSugestaoVinculo.RECUSADO
-    s.resolvido_em = datetime.utcnow()
+    s.resolvido_em = agora_utc()
     db.commit()
 
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-import { FAIXA_CHIP, FAIXA_DOT, brl, num, recenciaTexto, telefoneFmt } from "../lib/format";
+import { FAIXA_CHIP, FAIXA_DOT, brl, dataHoraUtc, dataTexto, num, recenciaTexto, telefoneFmt } from "../lib/format";
 
 const TAMANHO_PAGINA = 20;
 
@@ -50,9 +50,14 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
   const [vinculando, setVinculando] = useState(false);
   const [erroVinculo, setErroVinculo] = useState("");
 
-  function formatarData(iso) {
+  // v.inicio tem hora (datetime UTC ingênuo — usa dataHoraUtc, que marca o
+  // fuso antes de deixar o navegador interpretar). v.retornoData é só data
+  // (YYYY-MM-DD) — usa dataTexto, que nem passa por Date(): um construtor
+  // Date() numa string só-de-data é interpretado como meia-noite UTC, e
+  // exibir isso no Brasil (UTC-3) mostrava o dia ANTERIOR ao combinado.
+  function formatarDataVisita(iso) {
     if (!iso) return "—";
-    return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return dataHoraUtc(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
   }
 
   // Uma requisição só traz cliente, promessas, visitas, histórico e vínculo.
@@ -371,9 +376,9 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
           ) : (
             visitas.map((v) => (
               <div key={v.id} className="visita-historico-item">
-                <div className="visita-historico-data">{formatarData(v.inicio)}</div>
+                <div className="visita-historico-data">{formatarDataVisita(v.inicio)}</div>
                 <div>{v.observacao}</div>
-                {v.retornoData && <div className="visita-historico-promessas">Retorno combinado: {formatarData(v.retornoData)}</div>}
+                {v.retornoData && <div className="visita-historico-promessas">Retorno combinado: {dataTexto(v.retornoData)}</div>}
                 {v.promessas.length > 0 && (
                   <div className="visita-historico-promessas">
                     Promessas: {v.promessas.map((p) => p.texto + (p.cumprida ? " (cumprida)" : "")).join("; ")}

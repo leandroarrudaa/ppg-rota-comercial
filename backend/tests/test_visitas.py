@@ -1,7 +1,9 @@
 """Testes do fluxo bloqueante de visita: abrir, finalizar, relatório, promessas."""
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
+
+from app.services.tempo import hoje_brasil
 
 
 @pytest.fixture
@@ -43,7 +45,8 @@ def test_abrir_e_finalizar_com_relatorio(cliente_http, token):
     corpo = r3.json()
     assert corpo["status"] == "finalizada"
     assert corpo["retornoDias"] == 15
-    assert corpo["retornoData"] == str(date.today() + timedelta(days=15))
+    # data de calendário em Brasília, não no fuso da máquina que roda o teste
+    assert corpo["retornoData"] == str(hoje_brasil() + timedelta(days=15))
     assert len(corpo["promessas"]) == 1
     assert corpo["promessas"][0]["cumprida"] is False
 

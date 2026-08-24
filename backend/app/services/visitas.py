@@ -1,7 +1,7 @@
 """Regras do fluxo de visita: abrir, finalizar, relatório bloqueante e promessas."""
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, selectinload
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from ..models import Cliente, Promessa, StatusVisita, Usuario, Visita
 from ..schemas import ClienteAtualizar, PromessaOut, RelatorioVisita, VisitaOut
 from . import clientes as clientes_svc
+from .tempo import agora_utc, hoje_brasil, inicio_do_dia_brasil_em_utc
 
 
 def _para_saida(v: Visita) -> VisitaOut:
@@ -83,7 +84,7 @@ def finalizar(db: Session, vendedor: Usuario, visita_id: int) -> VisitaOut:
     v = _buscar_da_vez(db, vendedor, visita_id)
     if v.status != StatusVisita.ABERTA:
         raise HTTPException(status_code=400, detail="Essa visita já foi finalizada")
-    v.fim = datetime.utcnow()
+    v.fim = agora_utc()
     v.status = StatusVisita.AGUARDANDO_RELATORIO
     db.commit()
     db.refresh(v)
@@ -111,7 +112,8 @@ def salvar_relatorio(db: Session, vendedor: Usuario, visita_id: int, dados: Rela
 
     v.observacao = dados.observacao.strip()
     v.retorno_dias = dados.retornoDias
-    v.retorno_data = (date.today() + timedelta(days=dados.retornoDias)) if dados.retornoDias else None
+    # data de calendário em Brasília, não a do relógio do servidor (ver tempo.py)
+    v.retorno_data = (hoje_brasil() + timedelta(days=dados.retornoDias)) if dados.retornoDias else None
     v.status = StatusVisita.FINALIZADA
 
     for texto in dados.promessas:
@@ -159,15 +161,15 @@ def ids_com_promessa_pendente(db: Session, cliente_ids: list[int] | None = None)
 
 
 def cliente_ids_visitados_hoje(db: Session, vendedor: Usuario) -> list[int]:
-    """Clientes com visita FINALIZADA hoje pelo vendedor logado — usado pra
-    marcar riscado/cinza na Rota do Dia (visita já feita nessa rota)."""
-    hoje = date.today()
+    """Clientes com visita FINALIZADA hoje (calendário de Brasília) pelo
+    vendedor logado — usado pra marcar riscado/cinza na Rota do Dia."""
+    limite = inicio_do_dia_brasil_em_utc(hoje_brasil())
     registros = (
         db.query(Visita.cliente_id)
         .filter(
             Visita.vendedor_id == vendedor.id,
             Visita.status == StatusVisita.FINALIZADA,
-            Visita.inicio >= datetime.combine(hoje, datetime.min.time()),
+            Visita.inicio >= limite,
         )
         .distinct()
         .all()
@@ -180,7 +182,7 @@ def cumprir_promessa(db: Session, promessa_id: int) -> PromessaOut:
     if p is None:
         raise HTTPException(status_code=404, detail="Promessa não encontrada")
     p.cumprida = True
-    p.cumprida_em = datetime.utcnow()
+    p.cumprida_em = agora_utc()
     db.commit()
     db.refresh(p)
     return PromessaOut(id=p.id, clienteId=p.cliente_id, texto=p.texto, cumprida=p.cumprida,

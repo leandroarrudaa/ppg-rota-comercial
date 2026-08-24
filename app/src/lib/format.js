@@ -38,6 +38,44 @@ export function telefoneFmt(t) {
   return t;
 }
 
+// Datas puras (YYYY-MM-DD, sem hora — ex.: retornoData) vindas da API. O
+// construtor Date() interpreta uma string só-de-data como meia-noite UTC;
+// exibir isso com toLocaleDateString sem corrigir mostra o dia ANTERIOR pra
+// quem está no Brasil (UTC-3 vira 21h do dia de antes). Monta o texto a
+// partir dos componentes, sem passar pelo fuso do navegador.
+export function dataTexto(isoData) {
+  if (!isoData) return "—";
+  const [ano, mes, dia] = isoData.split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
+// Datas com hora (ISO sem sufixo de fuso — ex.: inicio/fim de visita) vindas
+// da API: são UTC ingênuo. Sem marcar isso, o navegador as interpreta como
+// já sendo hora local e erra o horário exibido (e, perto da virada do dia,
+// o próprio dia).
+export function dataHoraUtc(iso) {
+  if (!iso) return null;
+  const comFuso = /[zZ]|[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + "Z";
+  return new Date(comFuso);
+}
+
+// Date -> "YYYY-MM-DD" usando os componentes LOCAIS (não UTC) — o formato que
+// <input type="date"> espera e que a API de relatórios recebe como período.
+export function isoLocal(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dia}`;
+}
+
+// minutos -> "1h05" / "42 min"
+export function duracaoTexto(min) {
+  if (min == null) return "—";
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return h > 0 ? `${h}h${String(m).padStart(2, "0")}` : `${m} min`;
+}
+
 // "há X dias" -> texto amigável
 export function recenciaTexto(dias) {
   if (dias == null) return "—";
