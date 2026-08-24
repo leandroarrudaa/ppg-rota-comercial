@@ -50,34 +50,41 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
   const [vinculando, setVinculando] = useState(false);
   const [erroVinculo, setErroVinculo] = useState("");
 
-  useEffect(() => {
-    api.get(`/api/clientes/${cliente.id}/promessas`).then(setPromessas).catch(() => setPromessas([]));
-  }, [cliente.id]);
-
-  useEffect(() => {
-    api.get(`/api/clientes/${cliente.id}/visitas`).then(setVisitas).catch(() => setVisitas([]));
-  }, [cliente.id]);
-
   function formatarData(iso) {
     if (!iso) return "—";
     return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
   }
 
+  // Uma requisição só traz cliente, promessas, visitas, histórico e vínculo.
+  // Antes eram 4-5 chamadas ao abrir a ficha, duas delas em série (o vínculo
+  // esperava o cliente chegar). A ~350ms de ida e volta cada, a ficha levava
+  // segundos para montar no celular em campo.
   useEffect(() => {
-    if (!ehAdmin) return;
     let vivo = true;
-    // busca o cliente fresco em vez de confiar só na prop: um vínculo pode ter
-    // sido criado/desfeito em outra tela (ex.: revisão de sugestões) sem que
-    // a lista principal do app tenha sido atualizada.
-    api.get(`/api/clientes/${cliente.id}`).then((fresco) => {
-      if (!vivo) return;
-      if (fresco.clienteMestreId !== cliente.clienteMestreId) aoAtualizar(fresco);
-      if (fresco.clienteMestreId) {
-        api.get(`/api/vinculos/${fresco.clienteMestreId}`).then((v) => vivo && setVinculo(v)).catch(() => vivo && setVinculo(null));
-      } else {
+    setCarregandoHist(true);
+    setPagina(1);
+    api.get(`/api/clientes/${cliente.id}/ficha`)
+      .then((ficha) => {
+        if (!vivo) return;
+        setPromessas(ficha.promessas);
+        setVisitas(ficha.visitas);
+        setHistorico(ficha.historico);
+        setVinculo(ficha.vinculo);
+        // o cliente vem fresco do banco em vez de confiar só na prop: um
+        // vínculo pode ter sido criado/desfeito em outra tela (ex.: revisão de
+        // sugestões) sem que a lista principal do app tenha sido atualizada.
+        if (ehAdmin && ficha.cliente.clienteMestreId !== cliente.clienteMestreId) {
+          aoAtualizar(ficha.cliente);
+        }
+      })
+      .catch(() => {
+        if (!vivo) return;
+        setPromessas([]);
+        setVisitas([]);
+        setHistorico({ total: 0, itens: [] });
         setVinculo(null);
-      }
-    }).catch(() => {});
+      })
+      .finally(() => { if (vivo) setCarregandoHist(false); });
     return () => { vivo = false; };
   }, [cliente.id, ehAdmin]);
 
@@ -159,15 +166,6 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
 
   const temVisitaEmOutroCliente = visitaPendente && visitaPendente.clienteId !== cliente.id;
   const temVisitaNesteCliente = visitaPendente && visitaPendente.clienteId === cliente.id;
-
-  useEffect(() => {
-    setCarregandoHist(true);
-    setPagina(1);
-    api.get(`/api/clientes/${cliente.id}/historico-itens?todos=true`)
-      .then(setHistorico)
-      .catch(() => setHistorico({ total: 0, itens: [] }))
-      .finally(() => setCarregandoHist(false));
-  }, [cliente.id]);
 
   function ordenarPor(coluna) {
     if (ordenarCampo === coluna.campo) {

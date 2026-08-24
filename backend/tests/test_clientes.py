@@ -138,3 +138,32 @@ def test_patch_marcar_inativo_some_da_lista_padrao(cliente_http, token):
 
     lista_com_inativos = cliente_http.get("/api/clientes?incluirInativos=true", headers=_auth(token)).json()
     assert any(c["id"] == cliente_id for c in lista_com_inativos)
+
+# --------------------------------------------- Ficha unificada (uma requisicao)
+
+def test_ficha_unificada_traz_tudo_numa_resposta(cliente_http, token):
+    """A ficha substitui as 4-5 chamadas que a tela fazia ao abrir."""
+    lista = cliente_http.get("/api/clientes", headers=_auth(token)).json()
+    alvo = next(c for c in lista if c["nome"] == "Empresa Ouro LTDA")
+
+    r = cliente_http.get(f"/api/clientes/{alvo['id']}/ficha", headers=_auth(token))
+    assert r.status_code == 200
+    corpo = r.json()
+
+    assert corpo["cliente"]["id"] == alvo["id"]
+    assert corpo["cliente"]["nome"] == "Empresa Ouro LTDA"
+    for chave in ("promessas", "visitas", "historico", "vinculo"):
+        assert chave in corpo
+    assert isinstance(corpo["promessas"], list)
+    assert isinstance(corpo["visitas"], list)
+    assert "itens" in corpo["historico"]
+
+
+def test_ficha_unificada_de_cliente_inexistente_404(cliente_http, token):
+    r = cliente_http.get("/api/clientes/9999/ficha", headers=_auth(token))
+    assert r.status_code == 404
+
+
+def test_ficha_unificada_exige_autenticacao(cliente_http):
+    r = cliente_http.get("/api/clientes/1/ficha")
+    assert r.status_code == 401

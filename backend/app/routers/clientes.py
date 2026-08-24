@@ -3,11 +3,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Cliente, HistoricoItemCliente, Usuario
+from ..models import Cliente, HistoricoItemCliente, PapelUsuario, Usuario
 from ..schemas import (
     ClienteAtualizar,
     ClienteCriarManual,
     ClienteOut,
+    FichaClienteOut,
     HistoricoItemOut,
     HistoricoItensPagina,
     PromessaOut,
@@ -15,6 +16,7 @@ from ..schemas import (
 )
 from ..services import auth
 from ..services import clientes as svc
+from ..services import vinculos as vinculos_svc
 from ..services import visitas as visitas_svc
 from ..services.cnpj import normalizar_cnpj
 
@@ -114,6 +116,14 @@ def historico_itens(
     cliente = db.get(Cliente, cliente_id)
     if cliente is None:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    return _montar_historico(db, cliente, pagina=pagina, tamanho=tamanho, todos=todos)
+
+
+def _montar_historico(
+    db: Session, cliente: Cliente, *, pagina: int, tamanho: int, todos: bool
+) -> HistoricoItensPagina:
+    """Histórico por produto do cliente. Extraído para ser reaproveitado pela
+    rota unificada da ficha, sem duplicar a consulta."""
     cnpj = normalizar_cnpj(cliente.cnpj)
     if not cnpj:
         return HistoricoItensPagina(total=0, pagina=1, tamanho=tamanho, itens=[])
@@ -152,6 +162,38 @@ def historico_visitas(
 ):
     """Visitas já concluídas (com relatório), mais recente primeiro."""
     return visitas_svc.historico_cliente(db, cliente_id)
+
+
+@router.get("/{cliente_id}/ficha", response_model=FichaClienteOut)
+def ficha(
+    cliente_id: int,
+    usuario: Usuario = Depends(auth.usuario_atual),
+    db: Session = Depends(get_db),
+):
+    """Ficha completa numa resposta só — cliente, promessas, visitas, histórico
+    e vínculo. Substitui as 4-5 chamadas que a tela fazia ao abrir."""
+    cliente = db.get(Cliente, cliente_id)
+    if cliente is None:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    tem_promessa = cliente_id in visitas_svc.ids_com_promessa_pendente(db, [cliente_id])
+
+    # O vínculo é informação de admin — para vendedor a ficha vem sem ele,
+    # igual ao que a tela já fazia quando pedia as coisas separadamente.
+    vinculo = None
+    if usuario.papel == PapelUsuario.ADMIN and cliente.cliente_mestre_id:
+        try:
+            vinculo = vinculos_svc.obter_consolidado(db, cliente.cliente_mestre_id)
+        except HTTPException:
+            vinculo = None
+
+    return FichaClienteOut(
+        cliente=svc.para_saida(cliente, tem_promessa=tem_promessa),
+        promessas=visitas_svc.promessas_pendentes(db, cliente_id),
+        visitas=visitas_svc.historico_cliente(db, cliente_id),
+        historico=_montar_historico(db, cliente, pagina=1, tamanho=20, todos=True),
+        vinculo=vinculo,
+    )
 
 
 @router.get("/{cliente_id}/promessas", response_model=list[PromessaOut])

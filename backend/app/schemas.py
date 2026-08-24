@@ -204,3 +204,21 @@ class ClienteMestreOut(BaseModel):
     fatTotal: float
     noCompras: int
     faixa: str | None = None
+
+
+# ----------------------------------------------------------- Ficha (resposta única)
+
+class FichaClienteOut(BaseModel):
+    """Tudo que a ficha do cliente precisa, numa resposta só.
+
+    Antes a tela disparava 4 ou 5 requisições ao abrir — duas delas em série,
+    porque o vínculo só era pedido depois que o cliente chegava. Com o servidor
+    nos EUA e o banco em São Paulo, cada ida e volta custa ~350ms, e a ficha
+    levava segundos para montar. `vinculo` só vem preenchido para admin,
+    preservando o comportamento anterior.
+    """
+    cliente: ClienteOut
+    promessas: list[PromessaOut] = []
+    visitas: list[VisitaOut] = []
+    historico: HistoricoItensPagina
+    vinculo: ClienteMestreOut | None = None
