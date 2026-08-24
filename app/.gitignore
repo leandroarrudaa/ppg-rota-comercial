@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Base antiga, de antes do banco de dados existir. Nada no app le este
+# arquivo, mas ele era publicado a cada deploy (628 KB de dados de clientes
+# reais). Fica no disco local, fora do repositorio.
+public/clientes.json

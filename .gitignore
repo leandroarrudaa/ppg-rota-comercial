@@ -15,7 +15,12 @@ saida/*.txt
 
 # backend
 backend/.venv/
-backend/rota.db
+# qualquer banco SQLite, não só o rota.db: cópias de segurança ("rota - Copia.db")
+# carregam os mesmos dados reais de cliente e não podem ir para o repositório.
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
 backend/.env
 backend/__pycache__/
 backend/**/__pycache__/
