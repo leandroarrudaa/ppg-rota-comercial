@@ -75,6 +75,7 @@ def garantir_indices() -> None:
         "CREATE INDEX IF NOT EXISTS ix_clientes_listagem ON clientes (status, aceita_visita, lat, lng)",
         "CREATE INDEX IF NOT EXISTS ix_clientes_cidade ON clientes (cidade)",
         "CREATE INDEX IF NOT EXISTS ix_clientes_faixa ON clientes (faixa)",
+        "CREATE INDEX IF NOT EXISTS ix_visitas_vendedor_status_inicio ON visitas (vendedor_id, status, inicio)",
     ]
     with engine.begin() as conexao:
         for comando in comandos:

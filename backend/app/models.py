@@ -197,6 +197,17 @@ class Visita(Base):
     criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     promessas: Mapped[list["Promessa"]] = relationship(back_populates="visita_origem")
+    # Só leitura (sem back_populates): usadas pela tela de Relatórios para
+    # trazer nome do cliente e do vendedor sem uma consulta por visita.
+    cliente: Mapped["Cliente"] = relationship()
+    vendedor: Mapped["Usuario"] = relationship()
+
+    # Índice pensado pra tela de Relatórios: filtra por vendedor + status
+    # (só FINALIZADA) + período de datas — a mesma combinação que
+    # cliente_ids_visitados_hoje já usa pro riscado da Rota do Dia.
+    __table_args__ = (
+        Index("ix_visitas_vendedor_status_inicio", "vendedor_id", "status", "inicio"),
+    )
 
 
 class Promessa(Base):

@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { recomendar, scriptContato } from "./recomendacao";
-import { brl, recenciaTexto, telefoneFmt } from "./format";
+import { brl, dataHoraUtc, dataTexto, duracaoTexto, recenciaTexto, telefoneFmt } from "./format";
 
 const M = 40;
 const BAND_H = 56;
@@ -254,4 +254,68 @@ export async function gerarPdfContato({ diaNome, clientes }) {
   }));
 
   doc.save(`contatos-${diaNome.toLowerCase()}.pdf`);
+}
+
+// =================== PDF — RELATÓRIO DE VISITAS ===================
+export async function gerarPdfRelatorio({ tituloPeriodo, resumo, visitas }) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  const W = doc.internal.pageSize.getWidth();
+  const logo = await getLogo();
+
+  const cardY = BAND_H + 16;
+  const cardH = 56;
+  cardSombra(doc, M, cardY, W - M * 2, cardH);
+  const cols = [
+    ["VISITAS", String(resumo.totalVisitas)],
+    ["CLIENTES ÚNICOS", String(resumo.clientesUnicos)],
+    ["DURAÇÃO MÉDIA", resumo.duracaoMediaMin != null ? duracaoTexto(resumo.duracaoMediaMin) : "—"],
+    ["RETORNOS AGENDADOS", String(resumo.retornosAgendados)],
+  ];
+  const colW = (W - M * 2) / 4;
+  cols.forEach((c, i) => {
+    const x = M + 16 + i * colW;
+    if (i > 0) {
+      doc.setDrawColor(235, 237, 245);
+      doc.line(M + i * colW, cardY + 12, M + i * colW, cardY + cardH - 12);
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...MUTED);
+    doc.text(c[0], x, cardY + 21);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(...NAVY_L);
+    doc.text(c[1], x, cardY + 39);
+  });
+
+  const body = visitas.map((v, i) => {
+    const dh = dataHoraUtc(v.inicio);
+    const dataFmt = dh.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    const horaFmt = dh.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const promessasTxt = v.promessas.length ? `\nPromessas: ${v.promessas.map((p) => p.texto).join("; ")}` : "";
+    return [
+      String(i + 1),
+      `${dataFmt}\n${horaFmt}`,
+      `${v.clienteNome}\n${v.clienteCidade || ""} · ${v.vendedorNome}`,
+      duracaoTexto(v.duracaoMin),
+      v.retornoData ? dataTexto(v.retornoData) : "—",
+      `${v.observacao || ""}${promessasTxt}`,
+    ];
+  });
+
+  autoTable(doc, estiloTabela(doc, logo, "Relatório de visitas", tituloPeriodo, {
+    startY: cardY + cardH + 18,
+    head: [["#", "Data", "Cliente", "Duração", "Retorno", "Observação"]],
+    body,
+    columnStyles: {
+      0: { cellWidth: 22, halign: "center", fontStyle: "bold", fontSize: 9 },
+      1: { cellWidth: 56 },
+      2: { cellWidth: 118, fontStyle: "bold" },
+      3: { cellWidth: 48 },
+      4: { cellWidth: 58 },
+      5: { cellWidth: 183 },
+    },
+  }));
+
+  doc.save("relatorio-visitas.pdf");
 }

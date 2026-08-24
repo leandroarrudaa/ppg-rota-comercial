@@ -299,6 +299,14 @@ select.input { cursor: pointer; }
 .contato-card:hover { transform: translateY(-3px); box-shadow: 0 20px 40px rgba(22, 28, 82, 0.14), 0 6px 14px rgba(22, 28, 82, 0.07); }
 .contato-card.aberto { box-shadow: 0 22px 46px rgba(22, 28, 82, 0.16), 0 6px 14px rgba(22, 28, 82, 0.08); }
 
+/* ---------- Relatórios ---------- */
+.periodo-btns { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.relatorio-dia-titulo {
+  font-family: var(--font-display); font-size: 0.95rem; font-weight: 700; color: var(--ink);
+  text-transform: capitalize; margin: 0 0 8px 2px;
+}
+.relatorio-card { cursor: default; }
+
 /* moeda metálica numerada */
 .contato-coin {
   width: 44px; height: 44px; border-radius: 50%; flex: 0 0 auto; position: relative;

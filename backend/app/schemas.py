@@ -222,3 +222,36 @@ class FichaClienteOut(BaseModel):
     visitas: list[VisitaOut] = []
     historico: HistoricoItensPagina
     vinculo: ClienteMestreOut | None = None
+
+
+# ----------------------------------------------------------- Relatórios
+
+class VisitaRelatorioItem(BaseModel):
+    """Uma visita finalizada, com nome do cliente e do vendedor já embutidos —
+    a tela de Relatórios não precisa de uma requisição por cliente."""
+    id: int
+    clienteId: int
+    clienteNome: str
+    clienteCidade: str | None = None
+    vendedorId: int
+    vendedorNome: str
+    inicio: datetime
+    fim: datetime | None = None
+    duracaoMin: int | None = None
+    observacao: str | None = None
+    retornoDias: int | None = None
+    retornoData: date | None = None
+    promessas: list[PromessaOut] = []
+
+
+class RelatorioResumo(BaseModel):
+    totalVisitas: int
+    clientesUnicos: int
+    duracaoMediaMin: int | None = None
+    promessasFeitas: int
+    retornosAgendados: int
+
+
+class RelatorioVisitasOut(BaseModel):
+    resumo: RelatorioResumo
+    visitas: list[VisitaRelatorioItem]

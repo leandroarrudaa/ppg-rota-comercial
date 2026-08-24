@@ -11,11 +11,12 @@ import { api, limparSessao, registrarAoExpirar, tokenSalvo, usuarioSalvo } from 
 const MapaView = lazy(() => import("./views/MapaView"));
 const PlanoView = lazy(() => import("./views/PlanoView"));
 const RotaDiaView = lazy(() => import("./views/RotaDiaView"));
+const RelatoriosView = lazy(() => import("./views/RelatoriosView"));
 const SugestoesVinculoView = lazy(() => import("./views/SugestoesVinculoView"));
 const UsuariosView = lazy(() => import("./views/UsuariosView"));
 const RelatorioVisita = lazy(() => import("./views/RelatorioVisita"));
 
-const ABAS_BASE = ["Mapa", "Plano da Semana", "Rota do Dia", "Carteira"];
+const ABAS_BASE = ["Mapa", "Plano da Semana", "Rota do Dia", "Relatórios", "Carteira"];
 
 export default function App() {
   const [aba, setAba] = useState("Mapa");
@@ -176,6 +177,8 @@ export default function App() {
             visitasHojeIds={visitasHojeIds}
             usuario={usuario}
           />
+        ) : aba === "Relatórios" ? (
+          <RelatoriosView usuario={usuario} />
         ) : aba === "Vínculos" ? (
           <SugestoesVinculoView />
         ) : aba === "Usuários" ? (
