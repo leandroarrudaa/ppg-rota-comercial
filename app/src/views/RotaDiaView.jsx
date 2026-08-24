@@ -4,6 +4,7 @@ import L from "leaflet";
 import { api } from "../lib/api";
 import { valorEstrategico, vizinhoMaisProximo, rotaEstrada, motivoVisita } from "../lib/rota";
 import { FAIXAS, FAIXA_COR, FAIXA_CHIP, FAIXA_DOT, brl, num, telefoneFmt } from "../lib/format";
+import { carregarRota, salvarRota, limparRota } from "../lib/rotaSalva";
 import MapAutoSize from "../components/MapAutoSize";
 import FichaCliente from "./FichaCliente";
 
@@ -14,6 +15,11 @@ const FXKEY = { Ouro: "gold", Prata: "silver", Bronze: "bronze" };
 // perdendo todo o estado, e sem isso o vendedor via a tela recomeçar do
 // zero (mapa voltando pro centro padrão, lista vazia até nova busca) toda
 // vez que saía e voltava, mesmo sem nada ter mudado.
+//
+// A posição do mapa é descartável (não custa recentralizar) — por isso basta
+// module scope, que já morre se o navegador fechar. A SELEÇÃO e a ROTA
+// montada são trabalho de verdade e usam uma persistência mais forte
+// (localStorage, ver lib/rotaSalva.js), que sobrevive a fechar o app.
 let cacheCentro = [-25.095, -50.16];
 let cacheZoom = 12;
 let cacheUltimoBbox = null;
@@ -104,10 +110,28 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
   // visíveis, independente desse estado.
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
 
-  const [selecionados, setSelecionados] = useState(() => new Set());
-  const [conhecidos, setConhecidos] = useState(() => new Map()); // id -> cliente, acumulado de bbox+busca
-  const [modo, setModo] = useState("selecionando"); // selecionando | rota
-  const [rota, setRota] = useState(null); // { ordem, estrada }
+  // Restaura a seleção/rota salva (mesmo dia, mesmo vendedor) — ver
+  // lib/rotaSalva.js. Roda só uma vez, na montagem (useState com função lazy),
+  // e monta os 4 estados juntos pra nunca deixar um inconsistente com o outro
+  // (ex.: modo "rota" sem uma rota válida pra mostrar).
+  const [estadoInicial] = useState(() => {
+    const salvo = carregarRota(usuario.id);
+    if (!salvo) return { selecionados: new Set(), conhecidos: new Map(), modo: "selecionando", rota: null };
+    const conhecidosSalvos = new Map(salvo.clientes.map((c) => [c.id, c]));
+    const selecionadosSalvos = new Set(salvo.selecionadosIds.filter((id) => conhecidosSalvos.has(id)));
+    if (salvo.modo === "rota" && salvo.rotaOrdemIds?.length) {
+      const ordem = salvo.rotaOrdemIds.map((id) => conhecidosSalvos.get(id)).filter(Boolean);
+      if (ordem.length) {
+        return { selecionados: selecionadosSalvos, conhecidos: conhecidosSalvos, modo: "rota", rota: { ordem, estrada: salvo.rotaEstrada || null } };
+      }
+    }
+    return { selecionados: selecionadosSalvos, conhecidos: conhecidosSalvos, modo: "selecionando", rota: null };
+  });
+
+  const [selecionados, setSelecionados] = useState(estadoInicial.selecionados);
+  const [conhecidos, setConhecidos] = useState(estadoInicial.conhecidos); // id -> cliente, acumulado de bbox+busca
+  const [modo, setModo] = useState(estadoInicial.modo); // selecionando | rota
+  const [rota, setRota] = useState(estadoInicial.rota); // { ordem, estrada }
   const [carregandoRota, setCarregandoRota] = useState(false);
   const [fichaAberta, setFichaAberta] = useState(null); // cliente selecionado, ou null
   const [finalizando, setFinalizando] = useState(false);
@@ -118,6 +142,26 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
   const [modoMobile, setModoMobile] = useState("mapa");
   const mapRef = useRef(null);
   const bboxAtualRef = useRef(null);
+
+  // Salva a cada mudança de seleção/rota — é o que faz sair da tela (trocar
+  // de aba, fechar o app, o celular reiniciar) não perder o trabalho.
+  // Sem nada selecionado não há o que preservar; limpa o que tiver sobrado
+  // de uma seleção anterior esvaziada.
+  useEffect(() => {
+    if (selecionados.size === 0) {
+      limparRota(usuario.id);
+      return;
+    }
+    const idsRelevantes = new Set([...selecionados, ...(rota?.ordem.map((c) => c.id) || [])]);
+    const clientesRelevantes = [...idsRelevantes].map((id) => conhecidos.get(id)).filter(Boolean);
+    salvarRota(usuario.id, {
+      clientes: clientesRelevantes,
+      selecionadosIds: [...selecionados],
+      modo,
+      rotaOrdemIds: rota ? rota.ordem.map((c) => c.id) : null,
+      rotaEstrada: rota ? rota.estrada : null,
+    });
+  }, [selecionados, modo, rota, conhecidos, usuario.id]);
 
   function abrirFicha(cliente) {
     setFichaAberta(cliente);
