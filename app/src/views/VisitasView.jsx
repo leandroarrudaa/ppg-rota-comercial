@@ -4,6 +4,7 @@ import L from "leaflet";
 import { montarPlanoSemana, rotaEstrada, motivoVisita, DIAS } from "../lib/rota";
 import { recomendar } from "../lib/recomendacao";
 import { gerarPdfDia } from "../lib/pdf";
+import { usarRotaExterna } from "../lib/rotaSalva";
 import { FAIXA_COR, FAIXA_CHIP, FAIXA_DOT, brl, telefoneFmt, recenciaTexto } from "../lib/format";
 import MapAutoSize from "../components/MapAutoSize";
 
@@ -30,7 +31,7 @@ function FitRota({ pontos }) {
   return null;
 }
 
-export default function VisitasView({ clientes }) {
+export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   const [capacidade, setCapacidade] = useState(12);
   const [dia, setDia] = useState(0);
   const [estrada, setEstrada] = useState(null);
@@ -45,6 +46,16 @@ export default function VisitasView({ clientes }) {
     if (map) map.setView([c.lat, c.lng], Math.max(map.getZoom(), 14), { animate: true });
     const mk = markerRefs.current[c.id];
     if (mk) mk.openPopup();
+  }
+
+  // Leva o plano deste dia pra Rota do Dia, pronto pra executar (abrir
+  // visita, fechar com relatório) — em vez de fazer o Taborda selecionar os
+  // mesmos clientes de novo na mão. Substitui a seleção que já estivesse
+  // salva lá (não há perda real: visitas em andamento continuam finalizáveis
+  // pela ficha do cliente, independente de qual lista está na tela).
+  function usarHoje() {
+    usarRotaExterna(usuario.id, plano.clientes);
+    aoAbrirRotaDoDia();
   }
 
   const planos = useMemo(() => montarPlanoSemana(clientes, capacidade), [clientes, capacidade]);
@@ -96,8 +107,18 @@ export default function VisitasView({ clientes }) {
           <div className="resumo-item destaque"><span>Faturamento do roteiro</span><b>{brl(plano.valor)}</b></div>
         </div>
 
+        {aoAbrirRotaDoDia && usuario && (
+          <button
+            className="btn btn-primary"
+            style={{ width: "100%", justifyContent: "center" }}
+            onClick={usarHoje}
+          >
+            Usar esta rota hoje
+          </button>
+        )}
+
         <button
-          className="btn btn-primary"
+          className="btn btn-ghost"
           style={{ width: "100%", justifyContent: "center" }}
           onClick={() => gerarPdfDia({ diaNome: DIAS[dia], clientes: plano.clientes, km, min, valor: plano.valor })}
         >

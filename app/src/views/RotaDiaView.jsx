@@ -260,24 +260,31 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
     });
   }
 
-  async function gerarRota() {
+  function gerarRota() {
     const escolhidos = [...selecionados].map((id) => conhecidos.get(id)).filter(Boolean);
     if (escolhidos.length === 0) return;
     const ordem = escolhidos.length > 1 ? vizinhoMaisProximo(escolhidos, escolhidos[0]) : escolhidos;
     setModo("rota");
+    // a rota de estrada real (OSRM) é buscada pelo efeito abaixo, não aqui —
+    // o mesmo efeito também cobre quem chega em modo "rota" já pronto (rota
+    // restaurada sem estrada, ou vinda do botão "Usar esta rota hoje" do
+    // Plano da Semana), sem duplicar a lógica de busca.
     setRota({ ordem, estrada: null });
-    if (ordem.length >= 2) {
-      setCarregandoRota(true);
-      try {
-        const estrada = await rotaEstrada(ordem);
-        setRota({ ordem, estrada });
-      } catch {
-        setRota({ ordem, estrada: null });
-      } finally {
-        setCarregandoRota(false);
-      }
-    }
   }
+
+  // Busca a rota de estrada real sempre que há uma ordem definida mas ainda
+  // sem estrada calculada. Roda de novo só se a ordem mudar (não fica
+  // repetindo a cada render) e nunca sobrescreve uma estrada já resolvida.
+  useEffect(() => {
+    if (modo !== "rota" || !rota || rota.estrada || rota.ordem.length < 2) return;
+    let vivo = true;
+    setCarregandoRota(true);
+    rotaEstrada(rota.ordem)
+      .then((estrada) => { if (vivo) setRota((r) => (r ? { ...r, estrada } : r)); })
+      .catch(() => {})
+      .finally(() => { if (vivo) setCarregandoRota(false); });
+    return () => { vivo = false; };
+  }, [modo, rota?.ordem]);
 
   function novaSelecao() {
     setModo("selecionando");

@@ -43,6 +43,22 @@ function mesmoDiaLocal(timestamp) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+// Injeta uma rota vinda de fora (o botão "Usar esta rota hoje" do Plano da
+// Semana) como se ela tivesse sido montada na própria Rota do Dia — mesmo
+// formato, mesma janela de "só vale hoje", em vez de um mecanismo paralelo.
+// rotaEstrada fica null de propósito: a Rota do Dia recalcula a rota de
+// estrada real (OSRM) sozinha ao perceber que a ordem chegou sem ela.
+export function usarRotaExterna(vendedorId, clientesEmOrdem) {
+  const ids = clientesEmOrdem.map((c) => c.id);
+  salvarRota(vendedorId, {
+    clientes: clientesEmOrdem,
+    selecionadosIds: ids,
+    modo: "rota",
+    rotaOrdemIds: ids,
+    rotaEstrada: null,
+  });
+}
+
 // Devolve { clientes: cliente[], selecionadosIds, modo, rotaOrdemIds, rotaEstrada }
 // ou null se não houver nada válido pra restaurar.
 export function carregarRota(vendedorId) {

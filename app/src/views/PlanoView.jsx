@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import VisitasView from "./VisitasView";
 import ContatoView from "./ContatoView";
 
-export default function PlanoView({ clientes }) {
+export default function PlanoView({ clientes, usuario, aoAbrirRotaDoDia }) {
   const [sub, setSub] = useState("Visitas");
   const [meses, setMeses] = useState(6); // "ativo" = comprou nos últimos N meses
 
@@ -42,7 +42,9 @@ export default function PlanoView({ clientes }) {
       </div>
 
       <div className="plano-corpo">
-        {sub === "Visitas" ? <VisitasView clientes={ativos} /> : <ContatoView clientes={adormecidos} />}
+        {sub === "Visitas"
+          ? <VisitasView clientes={ativos} usuario={usuario} aoAbrirRotaDoDia={aoAbrirRotaDoDia} />
+          : <ContatoView clientes={adormecidos} />}
       </div>
     </div>
   );

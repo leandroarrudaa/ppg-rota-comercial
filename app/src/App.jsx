@@ -167,7 +167,7 @@ export default function App() {
             usuario={usuario}
           />
         ) : aba === "Plano da Semana" ? (
-          <PlanoView clientes={clientes} />
+          <PlanoView clientes={clientes} usuario={usuario} aoAbrirRotaDoDia={() => setAba("Rota do Dia")} />
         ) : aba === "Rota do Dia" ? (
           <RotaDiaView
             aoAtualizarCliente={atualizarClienteLocal}
