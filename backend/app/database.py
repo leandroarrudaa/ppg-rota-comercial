@@ -34,14 +34,19 @@ else:
         "options": f"-c statement_timeout={_TIMEOUT_QUERY_MS}",
     }
     opcoes_pool = {
-        # Testa a conexão antes de entregá-la. O pooler do Supabase fecha
-        # conexões ociosas em silêncio; sem isso, a primeira requisição depois
-        # de um período parado falha com "server closed the connection".
-        "pool_pre_ping": True,
-        # Recicla antes do limite do pooler, para não usar conexão já morta.
+        # Recicla a conexão bem antes do limite de ociosidade do pooler do
+        # Supabase, que fecha conexão parada em silêncio. É prevenção de graça:
+        # acontece na hora de devolver a conexão, não no caminho da requisição.
         "pool_recycle": 280,
         "pool_size": 5,
         "max_overflow": 5,
+        # pool_pre_ping fica DESLIGADO de propósito. Ele faria um SELECT 1 antes
+        # de cada consulta — e com o banco em São Paulo e o app nos EUA, esse
+        # teste custa ~170ms em TODA requisição (medido em produção: a consulta
+        # trivial de login subiu de 0,35s para 0,52s com ele ligado). O
+        # pool_recycle acima já evita quase toda conexão morta, e no caso raro
+        # que escapar o handler de SQLAlchemyError devolve 503 com mensagem
+        # clara, a conexão é invalidada e a tentativa seguinte já funciona.
     }
 
 engine = create_engine(config.database_url, connect_args=conectar_args, **opcoes_pool)
