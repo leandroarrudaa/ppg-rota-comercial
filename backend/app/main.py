@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .config import config
 from .database import Base, checar_conexao, engine, garantir_indices
-from .routers import auth, clientes, relatorios, vinculos, visitas
+from .routers import auth, clientes, configuracoes, relatorios, vinculos, visitas
 
 log = logging.getLogger(__name__)
 
@@ -91,6 +91,7 @@ app.include_router(clientes.router)
 app.include_router(visitas.router)
 app.include_router(vinculos.router)
 app.include_router(relatorios.router)
+app.include_router(configuracoes.router)
 
 
 @app.get("/api/saude")

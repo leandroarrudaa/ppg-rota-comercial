@@ -26,6 +26,7 @@ sys.path.insert(0, BACKEND_DIR)
 
 from app.database import Base, SessaoLocal, engine  # noqa: E402
 from app.models import Cliente, HistoricoItemCliente  # noqa: E402
+from app.services import configuracoes as config_svc  # noqa: E402
 from app.services import rfm  # noqa: E402
 from app.services.fontes import banco_mestre  # noqa: E402
 from app.services.cnpj import normalizar_cnpj  # noqa: E402
@@ -100,7 +101,14 @@ def main():
     # O RFM é relativo à carteira inteira — os quintis são calculados sobre
     # TODAS as empresas do banco mestre, inclusive as que ainda não estão no
     # app, senão as notas ficariam distorcidas por um recorte arbitrário.
-    rfm.calcular(registros)
+    #
+    # O piso de risco vem da tela de configurações: sem lê-lo aqui, cada
+    # importação desfaria o ajuste que o gerente tinha acabado de fazer.
+    piso_risco = config_svc.obter_numero(db, config_svc.FATURAMENTO_MINIMO_RISCO)
+    if piso_risco:
+        print(f"Piso de faturamento para alerta de risco: R$ {piso_risco:,.0f}"
+              .replace(",", "."))
+    rfm.calcular(registros, faturamento_minimo_risco=piso_risco)
 
     try:
         antes_risco = db.query(Cliente).filter(Cliente.em_risco.is_(True)).count()

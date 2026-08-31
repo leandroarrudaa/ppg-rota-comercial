@@ -52,7 +52,11 @@ def _dias(inicio: date | None, fim: date | None) -> int | None:
     return (fim - inicio).days
 
 
-def calcular(registros: list[dict], referencia: date | None = None) -> list[dict]:
+def calcular(
+    registros: list[dict],
+    referencia: date | None = None,
+    faturamento_minimo_risco: float = 0,
+) -> list[dict]:
     """Enriquece cada registro com as métricas derivadas e as notas de RFM.
 
     Espera em cada registro: ``no_compras``, ``fat_total``, ``primeira_compra``
@@ -103,6 +107,13 @@ def calcular(registros: list[dict], referencia: date | None = None) -> list[dict
 
         # Em risco = conta GRANDE que esfriou. É o alerta máximo do app e o
         # que manda o vendedor fazer visita de reativação.
-        reg["em_risco"] = m >= 4 and r <= 2
+        #
+        # O quintil sozinho diz "grande em relação à carteira", o que num
+        # conjunto de clientes pequenos marca gente de faturamento baixo. O
+        # piso é um valor absoluto, definido pelo gerente na tela de
+        # configurações, para o alerta não perder a força. Zero = sem piso.
+        reg["em_risco"] = (
+            m >= 4 and r <= 2 and (reg.get("fat_total") or 0) >= faturamento_minimo_risco
+        )
 
     return registros

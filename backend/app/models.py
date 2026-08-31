@@ -265,3 +265,20 @@ class SugestaoVinculo(Base):
     __table_args__ = (
         UniqueConstraint("cliente_a_id", "cliente_b_id", name="uq_sugestao_par"),
     )
+
+
+class Configuracao(Base):
+    """Ajustes do negócio que o Admin muda pela tela, sem depender de deploy.
+
+    Guardado como texto chave/valor de propósito: são poucas opções, mudam
+    raramente e cada uma tem um jeito próprio de ser lida (ver
+    services/configuracoes.py). Uma coluna por opção obrigaria migração de
+    banco a cada ajuste novo.
+    """
+    __tablename__ = "configuracoes"
+
+    chave: Mapped[str] = mapped_column(String(50), primary_key=True)
+    valor: Mapped[str] = mapped_column(String(200))
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
