@@ -32,3 +32,7 @@ app/.vite/
 
 # exports com dados sensíveis de cliente, gerados sob demanda
 clientes_sem_endereco.csv
+
+# pacote de atualização gerado do banco mestre — contém CNPJ, razão social e
+# faturamento de clientes reais; nunca pode ir para o repositório
+*.ppg

@@ -36,7 +36,8 @@ TAMANHO_CNPJ = 14
 NOMES_GENERICOS = ("CONSUMIDOR",)
 
 
-def _e_generico(nome: str | None) -> bool:
+def e_nome_generico(nome: str | None) -> bool:
+    """Nome de cliente que na verdade é venda de balcão sem identificação."""
     limpo = (nome or "").strip().upper()
     return not limpo or any(termo in limpo for termo in NOMES_GENERICOS)
 
@@ -74,7 +75,11 @@ def _data(valor) -> date | None:
         return None
 
 
-def ler_carteira(caminho: str, cnpjs_conhecidos: set[str] | None = None) -> list[dict]:
+def ler_carteira(
+    caminho: str,
+    cnpjs_conhecidos: set[str] | None = None,
+    incluir_genericos: bool = False,
+) -> list[dict]:
     """Vendas agregadas por CNPJ: nº de compras, faturamento e datas extremas.
 
     Uma "compra" é uma nota fiscal distinta (``chave_nota``), não uma linha de
@@ -85,6 +90,11 @@ def ler_carteira(caminho: str, cnpjs_conhecidos: set[str] | None = None) -> list
     entram SEMPRE, mesmo que as notas os tenham registrado como "CONSUMIDOR" —
     sem isso o filtro de nome genérico derrubava 58 clientes de verdade, que
     têm cadastro no app mas cujas notas saíram sem o nome preenchido.
+
+    ``incluir_genericos`` desliga o filtro por completo. É o que o gerador de
+    pacote usa: ele roda na máquina do escritório e NÃO tem como saber quem já
+    é cliente, então manda tudo e deixa a decisão para o servidor, que sabe.
+    Sem isso, aqueles 58 clientes ficavam de fora da atualização mensal.
     """
     conhecidos = cnpjs_conhecidos or set()
     con = _conectar(caminho)
@@ -114,7 +124,7 @@ def ler_carteira(caminho: str, cnpjs_conhecidos: set[str] | None = None) -> list
         chave = normalizar_cnpj(cnpj)
         if not chave or chave == CNPJ_EMPRESA:
             continue
-        if _e_generico(nome) and chave not in conhecidos:
+        if not incluir_genericos and e_nome_generico(nome) and chave not in conhecidos:
             continue
         registros.append({
             "cnpj": chave,

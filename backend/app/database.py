@@ -82,6 +82,42 @@ def garantir_indices() -> None:
             conexao.execute(text(comando))
 
 
+# Colunas acrescentadas a tabelas que já existem em produção. `create_all` só
+# cria tabela ausente — coluna nova numa tabela existente ele ignora em
+# silêncio, e o app quebraria na primeira consulta. Como o projeto não usa
+# Alembic, o caminho é o mesmo dos índices: DDL idempotente, roda toda vez.
+_COLUNAS_NOVAS = [
+    ("clientes", "primeira_compra", "DATE"),
+]
+
+
+def garantir_colunas() -> None:
+    """Acrescenta colunas novas em bancos que já existem.
+
+    ADD COLUMN IF NOT EXISTS não existe no SQLite, e no Postgres existe — então
+    a checagem é feita antes, lendo o catálogo, o que funciona nos dois.
+    """
+    with engine.begin() as conexao:
+        for tabela, coluna, tipo in _COLUNAS_NOVAS:
+            if _e_sqlite:
+                existentes = {
+                    linha[1] for linha in conexao.execute(text(f"PRAGMA table_info({tabela})"))
+                }
+            else:
+                existentes = {
+                    linha[0] for linha in conexao.execute(
+                        text("SELECT column_name FROM information_schema.columns "
+                             "WHERE table_name = :tabela"),
+                        {"tabela": tabela},
+                    )
+                }
+            if not existentes:
+                continue  # tabela ainda não existe; o create_all cuida dela
+            if coluna not in existentes:
+                log.info("Acrescentando coluna %s.%s", tabela, coluna)
+                conexao.execute(text(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}"))
+
+
 def checar_conexao() -> bool:
     """Faz um toque leve no banco. Usado pelo diagnóstico e pelo keep-alive
     que impede o Supabase gratuito de pausar por inatividade."""

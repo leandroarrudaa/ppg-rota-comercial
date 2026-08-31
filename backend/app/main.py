@@ -10,8 +10,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from .config import config
-from .database import Base, checar_conexao, engine, garantir_indices
-from .routers import auth, clientes, configuracoes, relatorios, vinculos, visitas
+from .database import Base, checar_conexao, engine, garantir_colunas, garantir_indices
+from .routers import auth, clientes, configuracoes, importacao, relatorios, vinculos, visitas
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ async def lifespan(_app: FastAPI):
     """
     try:
         await asyncio.to_thread(Base.metadata.create_all, engine)
+        await asyncio.to_thread(garantir_colunas)
         await asyncio.to_thread(garantir_indices)
     except SQLAlchemyError:
         log.exception("Não foi possível preparar o esquema — app sobe mesmo assim")
@@ -92,6 +93,7 @@ app.include_router(visitas.router)
 app.include_router(vinculos.router)
 app.include_router(relatorios.router)
 app.include_router(configuracoes.router)
+app.include_router(importacao.router)
 
 
 @app.get("/api/saude")

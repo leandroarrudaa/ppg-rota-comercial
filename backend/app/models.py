@@ -99,6 +99,7 @@ class Cliente(Base):
     ticket_medio: Mapped[float | None] = mapped_column(Float)
     recencia_dias: Mapped[int | None] = mapped_column(Integer)
     cadencia_dias: Mapped[int | None] = mapped_column(Integer)
+    primeira_compra: Mapped[date | None] = mapped_column(Date)
     ultima_compra: Mapped[date | None] = mapped_column(Date)
     r: Mapped[int | None] = mapped_column(Integer)
     f: Mapped[int | None] = mapped_column(Integer)
@@ -282,3 +283,58 @@ class Configuracao(Base):
     atualizado_em: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class MapaCodigoErp(Base):
+    """De-para do código interno do ERP para o CNPJ do cliente.
+
+    Existe porque o relatório diário de vendas identifica o cliente só por
+    "729 - RAZÃO SOCIAL" — não há CNPJ em lugar nenhum dele, e casar por nome
+    acerta 13% dos casos. O mapa vem do cadastro de clientes do banco mestre e
+    é o que torna o relatório aproveitável.
+
+    Códigos de pessoa física e de balcão não entram: não são carteira.
+    """
+    __tablename__ = "mapa_codigo_erp"
+
+    codigo: Mapped[str] = mapped_column(String(20), primary_key=True)
+    cnpj: Mapped[str] = mapped_column(String(14), index=True)
+    nome: Mapped[str | None] = mapped_column(String(200))
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PedidoImportado(Base):
+    """Pedido de venda já contabilizado, para não somar duas vezes.
+
+    A importação diária é incremental — ela ACRESCENTA ao acumulado do cliente.
+    Sem esta tabela, reenviar o arquivo do mesmo mês (que vai acontecer:
+    "será que subiu mesmo?") dobraria o faturamento de todo mundo. O número do
+    pedido é único e sequencial no ERP, então serve de chave natural.
+    """
+    __tablename__ = "pedidos_importados"
+
+    numero_pedido: Mapped[str] = mapped_column(String(20), primary_key=True)
+    cnpj: Mapped[str | None] = mapped_column(String(14), index=True)
+    data_pedido: Mapped[date | None] = mapped_column(Date)
+    valor: Mapped[float] = mapped_column(Float, default=0)
+    importado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class ImportacaoCarteira(Base):
+    """Histórico de importações — quem subiu o quê, quando e com que efeito.
+
+    Serve para responder "o Raphael subiu a planilha ontem?" sem precisar
+    procurar no banco linha por linha.
+    """
+    __tablename__ = "importacoes_carteira"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tipo: Mapped[str] = mapped_column(String(20))  # relatorio-vendas | banco-mestre
+    arquivo: Mapped[str | None] = mapped_column(String(255))
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
+    resumo: Mapped[str | None] = mapped_column(Text)  # JSON com as contagens
+    criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+    usuario: Mapped["Usuario | None"] = relationship()
