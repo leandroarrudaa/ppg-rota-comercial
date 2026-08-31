@@ -46,7 +46,7 @@ function raio(faixa) {
   return faixa === "Ouro" ? 7.5 : faixa === "Prata" ? 6 : 5;
 }
 
-export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente, aoIniciarVisita, aoFinalizarVisita, usuario }) {
+export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente, aoIniciarVisita, aoFinalizarVisita, aoCancelarVisita, usuario }) {
   const [faixasOn, setFaixasOn] = useState({ Ouro: true, Prata: true, Bronze: true });
   const [soRisco, setSoRisco] = useState(false);
   const [cidade, setCidade] = useState("Todas");
@@ -252,6 +252,7 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
           visitaPendente={visitaPendente}
           aoIniciarVisita={aoIniciarVisita}
           aoFinalizarVisita={aoFinalizarVisita}
+          aoCancelarVisita={aoCancelarVisita}
           usuario={usuario}
         />
       )}

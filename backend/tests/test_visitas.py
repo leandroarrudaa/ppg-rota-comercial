@@ -22,6 +22,10 @@ def _cliente_ouro(cliente_http, token):
     return cliente_http.get("/api/clientes?faixa=Ouro", headers=_auth(token)).json()[0]
 
 
+def _cliente_bronze(cliente_http, token):
+    return cliente_http.get("/api/clientes?faixa=Bronze", headers=_auth(token)).json()[0]
+
+
 def test_abrir_e_finalizar_com_relatorio(cliente_http, token):
     cliente = _cliente_ouro(cliente_http, token)
 
@@ -162,3 +166,65 @@ def test_relatorio_com_ajuste_de_status_invalido_nao_altera_nada(cliente_http, t
     pendente = cliente_http.get("/api/visitas/pendente", headers=_auth(token)).json()
     assert pendente["id"] == visita["id"]
     assert pendente["status"] == "aguardando_relatorio"
+
+
+# ------------------------------------------------- cancelar visita esquecida
+# Uma visita aberta bloqueia todas as outras. Sem saída, quem esqueceu de
+# finalizar fica travado em campo — o problema real que motivou isso.
+
+def test_cancelar_visita_aberta_libera_para_abrir_outra(cliente_http, token):
+    primeira = cliente_http.post(
+        "/api/visitas", json={"clienteId": _cliente_ouro(cliente_http, token)["id"]}, headers=_auth(token)
+    ).json()
+
+    # com a primeira aberta, abrir outra é recusado
+    outro = _cliente_bronze(cliente_http, token)["id"]
+    bloqueada = cliente_http.post("/api/visitas", json={"clienteId": outro}, headers=_auth(token))
+    assert bloqueada.status_code == 409
+
+    cancelada = cliente_http.delete(f"/api/visitas/{primeira['id']}", headers=_auth(token))
+    assert cancelada.status_code == 200
+
+    liberada = cliente_http.post("/api/visitas", json={"clienteId": outro}, headers=_auth(token))
+    assert liberada.status_code == 200
+
+
+def test_cancelar_some_com_a_visita_pendente(cliente_http, token):
+    visita = cliente_http.post(
+        "/api/visitas", json={"clienteId": _cliente_ouro(cliente_http, token)["id"]}, headers=_auth(token)
+    ).json()
+    assert cliente_http.get("/api/visitas/pendente", headers=_auth(token)).json() is not None
+
+    cliente_http.delete(f"/api/visitas/{visita['id']}", headers=_auth(token))
+    assert cliente_http.get("/api/visitas/pendente", headers=_auth(token)).json() is None
+
+
+def test_nao_cancela_visita_que_ja_aconteceu(cliente_http, token):
+    """Depois de finalizar, o relatório é obrigatório — cancelar seria uma
+    porta de saída para não preencher."""
+    visita = cliente_http.post(
+        "/api/visitas", json={"clienteId": _cliente_ouro(cliente_http, token)["id"]}, headers=_auth(token)
+    ).json()
+    cliente_http.patch(f"/api/visitas/{visita['id']}/finalizar", headers=_auth(token))
+
+    recusado = cliente_http.delete(f"/api/visitas/{visita['id']}", headers=_auth(token))
+    assert recusado.status_code == 400
+    assert "relatório" in recusado.json()["detail"]
+
+
+def test_nao_cancela_visita_de_outro_vendedor(cliente_http, token):
+    visita = cliente_http.post(
+        "/api/visitas", json={"clienteId": _cliente_ouro(cliente_http, token)["id"]}, headers=_auth(token)
+    ).json()
+
+    cliente_http.post(
+        "/api/auth/usuarios",
+        json={"nome": "Outro", "usuario": "outro", "senha": "123456", "papel": "vendedor"},
+        headers=_auth(token),
+    )
+    token_outro = cliente_http.post(
+        "/api/auth/login", json={"usuario": "outro", "senha": "123456"}
+    ).json()["token"]
+
+    recusado = cliente_http.delete(f"/api/visitas/{visita['id']}", headers=_auth(token_outro))
+    assert recusado.status_code == 403

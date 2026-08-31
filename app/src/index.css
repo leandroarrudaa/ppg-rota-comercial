@@ -109,11 +109,28 @@ a { color: inherit; text-decoration: none; }
 }
 .btn:active { transform: translateY(1px); }
 
+/* Botão desativado precisa PARECER desativado. Sem isto, um botão bloqueado
+   ficava com a cor normal e o toque simplesmente não fazia nada — foi assim
+   que o "Iniciar visita" travado passou por defeito de celular. No toque não
+   existe cursor nem hover pra dar a pista; a única pista é a aparência. */
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+}
+.btn:disabled:hover,
+.btn:disabled:active,
+.btn[aria-disabled="true"]:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .btn-primary { background: var(--primary); color: var(--primary-ink); }
-.btn-primary:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.btn-primary:not(:disabled):hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 
 .btn-ghost { background: var(--surface); color: var(--ink); border-color: var(--line); }
-.btn-ghost:hover { background: var(--surface-2); }
+.btn-ghost:not(:disabled):hover { background: var(--surface-2); }
 
 /* ---------- chips de faixa ---------- */
 .chip {

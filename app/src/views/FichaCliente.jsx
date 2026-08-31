@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
+import VisitaEmAndamento from "../components/VisitaEmAndamento";
 import { FAIXA_CHIP, FAIXA_DOT, brl, dataHoraUtc, dataTexto, num, recenciaTexto, telefoneFmt } from "../lib/format";
 
 const TAMANHO_PAGINA = 20;
@@ -17,7 +18,7 @@ const COLUNAS_HISTORICO = [
 // Modal de ficha do cliente: dados cadastrais, contato editável, status/aceitaVisita,
 // promessas pendentes, botão de iniciar visita e histórico de compra por item
 // (maior valor primeiro), paginado sob demanda.
-export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPendente, aoIniciarVisita, aoFinalizarVisita, usuario }) {
+export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPendente, aoIniciarVisita, aoFinalizarVisita, aoCancelarVisita, usuario }) {
   const ehAdmin = usuario?.papel === "admin";
   const [contatoNome, setContatoNome] = useState(cliente.contatoNome || "");
   const [contatoCelular, setContatoCelular] = useState(cliente.contatoCelular || "");
@@ -274,13 +275,24 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
               </button>
             ) : !aceitaVisita ? (
               <p className="muted" style={{ fontSize: 13 }}>Este cliente não aceita visita presencial.</p>
+            ) : temVisitaEmOutroCliente ? (
+              // O botão desabilitado com a explicação num title= era invisível
+              // no celular: o vendedor tocava e nada acontecia, sem nenhuma
+              // pista do motivo. Agora o motivo é o próprio conteúdo da tela.
+              <div className="aviso-bloqueio">
+                <b>Você tem uma visita em andamento em outro cliente.</b>
+                <span>
+                  Só é possível uma visita por vez. Finalize a que está aberta — ou cancele,
+                  se ela foi aberta por engano.
+                </span>
+                <VisitaEmAndamento
+                  visita={visitaPendente}
+                  aoFinalizar={aoFinalizarVisita}
+                  aoCancelar={aoCancelarVisita}
+                />
+              </div>
             ) : (
-              <button
-                className="btn btn-primary"
-                onClick={iniciarVisita}
-                disabled={iniciandoVisita || temVisitaEmOutroCliente}
-                title={temVisitaEmOutroCliente ? "Finalize a visita em andamento antes de iniciar outra" : undefined}
-              >
+              <button className="btn btn-primary" onClick={iniciarVisita} disabled={iniciandoVisita}>
                 {iniciandoVisita ? "Iniciando…" : "Iniciar visita"}
               </button>
             )}

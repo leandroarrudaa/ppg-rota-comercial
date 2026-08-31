@@ -92,7 +92,7 @@ function FitRota({ pontos }) {
   return null;
 }
 
-export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoIniciarVisita, aoFinalizarVisita, visitasHojeIds, usuario }) {
+export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoIniciarVisita, aoFinalizarVisita, aoCancelarVisita, visitasHojeIds, usuario }) {
   const [bbox, setBbox] = useState(cacheUltimoBbox);
   const [candidatosBbox, setCandidatosBbox] = useState(cacheCandidatosBbox);
   const [carregando, setCarregando] = useState(false);
@@ -309,6 +309,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
       visitaPendente={visitaPendente}
       aoIniciarVisita={aoIniciarVisita}
       aoFinalizarVisita={aoFinalizarVisita}
+      aoCancelarVisita={aoCancelarVisita}
       usuario={usuario}
     />
   );

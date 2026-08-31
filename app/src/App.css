@@ -622,3 +622,60 @@ select.input { cursor: pointer; }
 .visita-historico-item:last-child { border-bottom: none; }
 .visita-historico-data { font-weight: 700; color: var(--ink); font-size: 0.8rem; }
 .visita-historico-promessas { margin-top: 4px; font-size: 0.78rem; color: var(--faint); }
+
+/* ---------- visita em andamento ---------- */
+/* Barra fixa logo abaixo do cabeçalho. Fica em TODAS as telas enquanto houver
+   visita aberta: é o que impede alguém de ficar bloqueado sem entender por
+   quê. A cor de alerta é intencional — precisa ser notada em tela de celular
+   sob sol, não passar por decoração. */
+.visita-andamento {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 10px 20px;
+  background: #fff4ec;
+  border-bottom: 1px solid #f0c9ae;
+  color: var(--ink);
+}
+.visita-andamento-texto { font-size: 14px; }
+.visita-andamento-acoes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* Na barra os botões são secundários à leitura — menores que os de ação
+   principal da tela, pra não competir com o que o vendedor foi fazer ali. */
+.visita-andamento .btn {
+  font-size: 13px;
+  padding: 0.45rem 0.95rem;
+}
+/* Dentro da ficha o bloco já está num contexto explicado: sem fundo próprio,
+   sem borda, só as ações. */
+.visita-andamento.compacto {
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+/* Aviso do porquê não dá pra iniciar visita aqui. Substituiu um botão
+   desabilitado cuja explicação vivia num title= — invisível no celular. */
+.aviso-bloqueio {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--r-md, 12px);
+  background: #fff4ec;
+  border: 1px solid #f0c9ae;
+  font-size: 13px;
+}
+.aviso-bloqueio b { font-size: 14px; }
+
+@media (max-width: 720px) {
+  .visita-andamento { padding: 10px 14px; }
+  .visita-andamento-acoes { width: 100%; }
+  .visita-andamento-acoes .btn { flex: 1; justify-content: center; }
+}

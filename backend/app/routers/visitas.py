@@ -49,6 +49,17 @@ def finalizar(
     return svc.finalizar(db, usuario, visita_id)
 
 
+@router.delete("/{visita_id}")
+def cancelar(
+    visita_id: int,
+    usuario: Usuario = Depends(auth.usuario_atual),
+    db: Session = Depends(get_db),
+):
+    """Abandona uma visita aberta por engano — libera o vendedor pra abrir outra."""
+    svc.cancelar(db, usuario, visita_id)
+    return {"ok": True}
+
+
 @router.post("/{visita_id}/relatorio", response_model=VisitaOut)
 def relatorio(
     visita_id: int,

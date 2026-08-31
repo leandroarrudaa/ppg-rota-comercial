@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
 import LoginView from "./views/LoginView";
+import VisitaEmAndamento from "./components/VisitaEmAndamento";
 import { api, limparSessao, registrarAoExpirar, tokenSalvo, usuarioSalvo } from "./lib/api";
 
 // Cada aba é baixada só quando aberta pela primeira vez. Antes, tudo vinha num
@@ -25,6 +26,9 @@ export default function App() {
   const [usuario, setUsuario] = useState(() => (tokenSalvo() ? usuarioSalvo() : null));
   const [erroCarga, setErroCarga] = useState("");
   const [visitaPendente, setVisitaPendente] = useState(null);
+  // nome do cliente da visita aberta — a visita só traz o id, e a barra
+  // precisa dizer ONDE a visita está aberta pra ser útil em campo
+  const [nomeClienteVisita, setNomeClienteVisita] = useState("");
   const [visitasHojeIds, setVisitasHojeIds] = useState(() => new Set());
   const [menuAberto, setMenuAberto] = useState(false);
 
@@ -47,6 +51,20 @@ export default function App() {
     api.get("/api/visitas/hoje").then((ids) => setVisitasHojeIds(new Set(ids))).catch(() => {});
   }, [usuario]);
 
+  // O nome vem do servidor porque a lista carregada na tela pode não conter
+  // esse cliente (ela é filtrada), e a barra sem nome não ajudaria ninguém.
+  useEffect(() => {
+    if (!visitaPendente?.clienteId) {
+      setNomeClienteVisita("");
+      return;
+    }
+    let vivo = true;
+    api.get(`/api/clientes/${visitaPendente.clienteId}`)
+      .then((c) => { if (vivo) setNomeClienteVisita(c.nome); })
+      .catch(() => { if (vivo) setNomeClienteVisita(""); });
+    return () => { vivo = false; };
+  }, [visitaPendente?.clienteId]);
+
   function sair() {
     limparSessao();
     setUsuario(null);
@@ -63,6 +81,13 @@ export default function App() {
   async function finalizarVisita() {
     const atualizada = await api.patch(`/api/visitas/${visitaPendente.id}/finalizar`, {});
     setVisitaPendente(atualizada);
+  }
+
+  // Abandona a visita aberta. É a saída pra quem esqueceu de finalizar e
+  // ficou impedido de abrir qualquer outra — o caso que travou o Taborda.
+  async function cancelarVisita() {
+    await api.del(`/api/visitas/${visitaPendente.id}`);
+    setVisitaPendente(null);
   }
 
   // Reflete um PATCH de cliente na lista principal: some da lista se virou
@@ -144,6 +169,20 @@ export default function App() {
         )}
       </header>
 
+      {/* Enquanto houver visita aberta, ela fica visível em qualquer tela —
+          com onde está aberta e como sair dela. Antes, essa informação só
+          existia dentro da ficha do cliente certo: quem não soubesse qual era
+          ficava sem conseguir abrir nenhuma visita nova, sem nada na tela
+          explicando por quê. */}
+      {visitaPendente?.status === "aberta" && (
+        <VisitaEmAndamento
+          visita={visitaPendente}
+          nomeCliente={nomeClienteVisita}
+          aoFinalizar={finalizarVisita}
+          aoCancelar={cancelarVisita}
+        />
+      )}
+
       <main className="conteudo">
         <Suspense fallback={<div className="vazio">Carregando…</div>}>
         {!clientes ? (
@@ -164,6 +203,7 @@ export default function App() {
             visitaPendente={visitaPendente}
             aoIniciarVisita={iniciarVisita}
             aoFinalizarVisita={finalizarVisita}
+            aoCancelarVisita={cancelarVisita}
             usuario={usuario}
           />
         ) : aba === "Plano da Semana" ? (
@@ -174,6 +214,7 @@ export default function App() {
             visitaPendente={visitaPendente}
             aoIniciarVisita={iniciarVisita}
             aoFinalizarVisita={finalizarVisita}
+            aoCancelarVisita={cancelarVisita}
             visitasHojeIds={visitasHojeIds}
             usuario={usuario}
           />
@@ -195,7 +236,7 @@ export default function App() {
       {/* Modal bloqueante: aparece assim que a visita é finalizada e trava
           o app inteiro até o relatório ser salvo — não tem botão de fechar. */}
       {visitaPendente?.status === "aguardando_relatorio" && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<div className="vazio">Abrindo o relatório da visita…</div>}>
           <RelatorioVisita
             visita={visitaPendente}
             aoSalvo={() => {

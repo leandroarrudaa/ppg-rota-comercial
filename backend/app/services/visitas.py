@@ -71,6 +71,34 @@ def abrir(db: Session, vendedor: Usuario, cliente_id: int) -> VisitaOut:
     return _para_saida(v)
 
 
+def cancelar(db: Session, vendedor: Usuario, visita_id: int) -> None:
+    """Abandona uma visita ABERTA, apagando o registro.
+
+    Existe porque a visita aberta é bloqueante: enquanto houver uma, o vendedor
+    não consegue abrir nenhuma outra. Sem saída, uma visita esquecida (celular
+    descarregou, saiu do app antes de finalizar) trava o sujeito em campo por
+    tempo indeterminado — foi exatamente o que aconteceu.
+
+    Apaga em vez de marcar como cancelada de propósito: uma visita abandonada
+    não tem observação, nem promessa, nem hora de fim; não há o que preservar.
+    Guardar exigiria um valor novo no tipo enumerado do Postgres, e uma
+    migração de banco não é o que se quer no caminho de destravar alguém que
+    já está parado. Nada de relatório é afetado — eles só contam visita
+    FINALIZADA.
+
+    Só a visita AGUARDANDO_RELATORIO não pode ser cancelada: essa já aconteceu
+    de verdade e o relatório dela é obrigatório.
+    """
+    v = _buscar_da_vez(db, vendedor, visita_id)
+    if v.status != StatusVisita.ABERTA:
+        raise HTTPException(
+            status_code=400,
+            detail="Essa visita já foi finalizada — preencha o relatório para concluí-la.",
+        )
+    db.delete(v)
+    db.commit()
+
+
 def _buscar_da_vez(db: Session, vendedor: Usuario, visita_id: int) -> Visita:
     v = db.get(Visita, visita_id)
     if v is None:
