@@ -24,6 +24,7 @@ import sys
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
+from app.config import config  # noqa: E402
 from app.database import Base, SessaoLocal, engine  # noqa: E402
 from app.models import Cliente, HistoricoItemCliente  # noqa: E402
 from app.services import configuracoes as config_svc  # noqa: E402
@@ -37,6 +38,21 @@ from app.services.importacao import aplicar_vendas  # noqa: E402
 BANCO_MESTRE_PADRAO = os.path.join(
     os.path.dirname(os.path.dirname(BACKEND_DIR)), "output", "banco_mestre.db"
 )
+
+
+def descrever_banco() -> tuple[str, bool]:
+    """Onde este script vai gravar, sem revelar a senha da conexão.
+
+    O caminho do banco vem do backend/.env, que existe justamente para apontar
+    para produção. Sem esse aviso, rodar a atualização contra o banco errado
+    seria um acidente de um comando só — e silencioso.
+    """
+    url = config.database_url
+    if url.startswith("sqlite"):
+        return f"LOCAL (arquivo {os.path.basename(url.split('///')[-1])})", False
+    # postgresql://usuario:senha@servidor:porta/banco -> mostra só o servidor
+    servidor = url.split("@")[-1].split("/")[0] if "@" in url else "desconhecido"
+    return f"PRODUÇÃO ({servidor})", True
 
 
 def _linha(titulo=""):
@@ -70,6 +86,12 @@ def main():
     com_historico = "--com-historico" in sys.argv
     caminho = argumentos[0] if argumentos else BANCO_MESTRE_PADRAO
 
+    destino, e_producao = descrever_banco()
+    print("=" * 62)
+    print(f"  Vai gravar em: {destino}")
+    if e_producao and not simular:
+        print("  ATENÇÃO: isto altera a base que o time usa em campo.")
+    print("=" * 62)
     print(f"Banco mestre: {caminho}")
     print("MODO SIMULAÇÃO — nada será gravado.\n" if simular else "")
 
