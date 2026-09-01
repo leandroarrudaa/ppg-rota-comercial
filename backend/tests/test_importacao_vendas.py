@@ -7,25 +7,26 @@ from app.models import Cliente, MapaCodigoErp, OrigemCliente, PedidoImportado
 from app.services.fontes import relatorio_vendas as rv
 from app.services.importacao import aplicar_relatorio_vendas
 
-# Trecho fiel ao arquivo real: relatório de impressão, ponto-e-vírgula de
-# recheio, valores em padrão brasileiro e o cliente identificado só por
-# "código - nome" (sem CNPJ nenhum).
+# Reproduz a ESTRUTURA do arquivo real (relatório de impressão, ponto-e-vírgula
+# de recheio, valores em padrão brasileiro, cliente identificado só por
+# "código - nome" e sem CNPJ nenhum) — mas com nomes e produtos inventados.
+# Dado de cliente real não entra em teste: teste vai para o repositório.
 RELATORIO = """Pedidos com Produtos (Detalhado);;;;
 PPG - PARAFUSOS E FERRAMENTAS;;;;
 
-Cliente:;729 - R O L COMERCIO DE REDES LTDA;;;;
+Cliente:;729 - METALFICTA COMERCIO DE PECAS LTDA;;;;
 Pedido:;26367;;;Data Cadastro:;01/08/2026;;;Cond. Pagto:;;;;;;CARTAO;;;;;;;;;;Vendedor:;;;5 - TABORDA;;;;
 Codigo;;;Descricao;;;;;;;;;;;;Vlr Custo;;;;;;Unid;;;Qtde;;;Vlr Venda;;;;Total;;
 
-5018;;;GANCHO P/BUCHA C/ABA 08 ;;;;;;;;;;;;0,43;;;;;;UN;;;200;;;0,77;;;;154,00;;
-212;;;BUCHA FIXACAO C/ANEL 08 ;;;;;;;;;;;;0,02;;;;;;UN;;;200;;;0,08;;;;16,00;;
+5018;;;PECA DE TESTE A ;;;;;;;;;;;;0,43;;;;;;UN;;;200;;;0,77;;;;154,00;;
+212;;;PECA DE TESTE B ;;;;;;;;;;;;0,02;;;;;;UN;;;200;;;0,08;;;;16,00;;
 Total Custo:;;;90,00;;;;;;Desconto:;;;;0,00;;;;;Total Liq:;;;;170,00;;
 
-Cliente:;10340 - BRENDO PRADO;;;;
+Cliente:;10340 - FULANO DE TAL;;;;
 Pedido:;26368;;;Data Cadastro:;02/08/2026;;;Cond. Pagto:;;;;;;DINHEIRO;;;;;;;;;;Vendedor:;;;8 - EDUARDO;;;;
 Codigo;;;Descricao;;;;;;;;;;;;Vlr Custo;;;;;;Unid;;;Qtde;;;Vlr Venda;;;;Total;;
 
-3620;;;DISCO CORTE INOX 4.1/2 ;;;;;;;;;;;;1,12;;;;;;PC;;;1;;;3,50;;;;3,50;;
+3620;;;PECA DE TESTE C ;;;;;;;;;;;;1,12;;;;;;PC;;;1;;;3,50;;;;3,50;;
 Total Custo:;;;1,12;;;;;;Desconto:;;;;0,00;;;;;Total Liq:;;;;3,50;;
 """
 
@@ -41,7 +42,7 @@ def test_le_pedidos_itens_e_metadados():
     primeiro = pedidos[0]
     assert primeiro.numero == "26367"
     assert primeiro.codigo_cliente == "729"
-    assert primeiro.nome_cliente == "R O L COMERCIO DE REDES LTDA"
+    assert primeiro.nome_cliente == "METALFICTA COMERCIO DE PECAS LTDA"
     assert primeiro.data == date(2026, 8, 1)
     assert primeiro.vendedor == "5 - TABORDA"
     assert primeiro.total == 170.00
@@ -93,7 +94,7 @@ def test_periodo_do_arquivo():
 def carteira(db):
     """Um cliente da carteira com de-para, e o código de balcão sem de-para."""
     cliente = Cliente(
-        cnpj="44.444.444/0001-44", nome="R O L Comercio de Redes LTDA",
+        cnpj="44.444.444/0001-44", nome="Metalficta Comercio de Pecas LTDA",
         origem=OrigemCliente.ANTIGO, no_compras=10, fat_total=5000.0,
         primeira_compra=date(2021, 1, 1), ultima_compra=date(2026, 5, 1),
         faixa="Prata",
@@ -142,7 +143,7 @@ def test_venda_de_balcao_sem_depara_e_contada_mas_nao_vira_cliente(db, carteira)
     relatorio = aplicar_relatorio_vendas(db, rv.ler(RELATORIO))
     db.commit()
 
-    assert relatorio.sem_depara == 1              # o pedido do BRENDO PRADO
+    assert relatorio.sem_depara == 1              # o pedido do FULANO DE TAL
     assert db.query(Cliente).count() == antes     # ninguém foi criado
     assert db.query(PedidoImportado).count() == 2  # os dois ficam registrados
 
@@ -157,7 +158,7 @@ def test_cnpj_conhecido_mas_fora_da_carteira_e_reportado(db):
     db.commit()
 
     assert relatorio.cnpj_fora_da_carteira == 1
-    assert "R O L COMERCIO DE REDES LTDA" in relatorio.nomes_fora_da_carteira
+    assert "METALFICTA COMERCIO DE PECAS LTDA" in relatorio.nomes_fora_da_carteira
     assert db.query(Cliente).filter(Cliente.cnpj == CNPJ_ROL).count() == 0
 
 

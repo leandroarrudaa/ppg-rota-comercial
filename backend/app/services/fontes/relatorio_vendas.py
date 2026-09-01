@@ -3,10 +3,10 @@
 Este arquivo NÃO é uma tabela — é um relatório de impressão salvo como CSV,
 com blocos aninhados e uma quantidade enorme de ponto-e-vírgula de recheio:
 
-    Cliente:;729 - R O L COMERCIO DE REDES LTDA;;;;
+    Cliente:;729 - METALFICTA COMERCIO DE PECAS LTDA;;;;
     Pedido:;26367;;;Data Cadastro:;01/08/2026;;;...;Vendedor:;;;5 - TABORDA
     Código;;;Descrição;;;...;Vlr Custo;;;Unid;;;Qtde;;;Vlr Venda;;;;Total
-    5018;;;GANCHO P/BUCHA C/ABA 08;;;;;;;;;;;;0,43;;;;;;UN;;;200;;;0,77;;;;154,00
+    5018;;;PECA DE TESTE;;;;;;;;;;;;0,43;;;;;;UN;;;200;;;0,77;;;;154,00
     Total Custo:;;;90,00;;;;;;Desconto:;;;;0,00;;;;;Total Liq:;;;;170,00
 
 O cliente aparece como "código - nome", sem CNPJ nenhum — daí a necessidade do
@@ -23,7 +23,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
-# "729 - R O L COMERCIO DE REDES LTDA"
+# "729 - METALFICTA COMERCIO DE PECAS LTDA"
 _CLIENTE = re.compile(r"^(\d+)\s*-\s*(.+)$")
 _DATA = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
 # valor no padrão brasileiro: 1.234,56 (com ou sem sinal)
