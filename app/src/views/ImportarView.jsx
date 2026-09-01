@@ -43,10 +43,21 @@ function enviarArquivo(caminho, arquivo, aoProgresso) {
       if (req.status >= 200 && req.status < 300) return resolve(corpo);
       reject(new Error(corpo?.detail || "Não foi possível processar o arquivo."));
     };
-    req.onerror = () => reject(new Error("Sem conexão com o servidor. Verifique sua internet."));
-    req.ontimeout = () => reject(new Error("O servidor demorou demais para responder."));
-    // Importação mexe na carteira inteira e é mais lenta que uma tela comum.
-    req.timeout = 180_000;
+    // Numa importação, "conexão perdida" quase nunca é internet do usuário: é
+    // o servidor tendo derrubado a requisição no meio de uma gravação grande.
+    // Dizer "verifique sua internet" mandava investigar o lugar errado.
+    req.onerror = () => reject(new Error(
+      "A conexão caiu durante o envio. Nada foi gravado pela metade — a importação " +
+      "é tudo-ou-nada. Confira em \"Importações anteriores\" logo abaixo se ela entrou; " +
+      "se não entrou, tente de novo."
+    ));
+    req.ontimeout = () => reject(new Error(
+      "O servidor demorou demais para responder. Nada foi gravado pela metade. " +
+      "Confira em \"Importações anteriores\" se ela entrou antes de tentar de novo."
+    ));
+    // A primeira importação do banco mestre grava dezenas de milhares de linhas
+    // num banco que fica longe do servidor. Três minutos não bastavam.
+    req.timeout = 900_000;
     const corpo = new FormData();
     corpo.append("arquivo", arquivo);
     req.send(corpo);
@@ -74,6 +85,9 @@ export default function ImportarView() {
   const [ocupado, setOcupado] = useState("");
   const [erro, setErro] = useState("");
   const [concluido, setConcluido] = useState(null);
+  // marca que foi o GRAVAR que falhou, não a análise — senão a prévia fica na
+  // tela com um erro em cima e parece que ela é que deu errado
+  const [falhouAoGravar, setFalhouAoGravar] = useState(false);
   const [historico, setHistorico] = useState([]);
   const entradaRef = useRef(null);
 
@@ -99,6 +113,7 @@ export default function ImportarView() {
     setErro("");
     setPrevia(null);
     setConcluido(null);
+    setFalhouAoGravar(false);
     setProgresso(0);
     try {
       const r = await enviarArquivo(`/api/importacao/${origem}`, arquivo, setProgresso);
@@ -113,6 +128,7 @@ export default function ImportarView() {
   async function confirmar() {
     setOcupado("gravar");
     setErro("");
+    setFalhouAoGravar(false);
     setProgresso(0);
     try {
       const r = await enviarArquivo(`/api/importacao/${origem}?confirmar=true`, arquivo, setProgresso);
@@ -123,6 +139,7 @@ export default function ImportarView() {
       carregarHistorico();
     } catch (e) {
       setErro(e.message);
+      setFalhouAoGravar(true);
     } finally {
       setOcupado("");
     }
@@ -164,14 +181,23 @@ export default function ImportarView() {
         <div className="importar-progresso"><div style={{ width: `${progresso}%` }} /></div>
       )}
       {ocupado === "gravar" && progresso >= 100 && (
-        <p className="muted" style={{ fontSize: 13 }}>Gravando… a carteira inteira é recalculada, pode levar alguns segundos.</p>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Gravando… a carteira inteira é recalculada. A primeira importação do banco mestre
+          pode levar alguns minutos — <b>não feche esta página</b>.
+        </p>
       )}
 
       {erro && <div className="login-erro">{erro}</div>}
 
       {resumo && (
         <div className={"importar-previa" + (concluido ? " concluida" : "")}>
-          <h4>{concluido ? "Importação concluída" : "O que vai mudar"}</h4>
+          <h4>{concluido ? "Importação concluída" : falhouAoGravar ? "Não chegou a gravar" : "O que vai mudar"}</h4>
+          {falhouAoGravar && (
+            <p className="muted" style={{ fontSize: 13, marginTop: -6 }}>
+              Os números abaixo são o que a análise encontrou. Eles continuam valendo —
+              é só tentar gravar de novo.
+            </p>
+          )}
 
           {ehRelatorio ? (
             <div className="previa-grade">
@@ -245,7 +271,7 @@ export default function ImportarView() {
           {previa && (
             <div className="importar-confirmar">
               <button className="btn btn-primary" disabled={Boolean(ocupado)} onClick={confirmar}>
-                {ocupado === "gravar" ? "Gravando…" : "Confirmar e gravar"}
+                {ocupado === "gravar" ? "Gravando…" : falhouAoGravar ? "Tentar gravar de novo" : "Confirmar e gravar"}
               </button>
               <button className="btn btn-ghost" disabled={Boolean(ocupado)} onClick={() => setPrevia(null)}>
                 Cancelar

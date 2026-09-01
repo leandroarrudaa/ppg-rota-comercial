@@ -44,16 +44,20 @@ def aplicar_pacote(db: Session, dados: dict) -> dict:
         if chave
     }
 
-    depara_novos = depara_atualizados = 0
-    existentes_depara = {m.codigo: m for m in db.query(MapaCodigoErp).all()}
+    # Mesma lógica do histórico: só o que mudou, e sem carregar objetos.
+    existentes_depara = dict(db.query(MapaCodigoErp.codigo, MapaCodigoErp.cnpj).all())
+    depara_criar, depara_alterar = [], []
     for codigo, cnpj in (dados.get("depara") or {}).items():
         atual = existentes_depara.get(codigo)
         if atual is None:
-            db.add(MapaCodigoErp(codigo=codigo, cnpj=cnpj))
-            depara_novos += 1
-        elif atual.cnpj != cnpj:
-            atual.cnpj = cnpj
-            depara_atualizados += 1
+            depara_criar.append({"codigo": codigo, "cnpj": cnpj})
+        elif atual != cnpj:
+            depara_alterar.append({"codigo": codigo, "cnpj": cnpj})
+    if depara_criar:
+        db.bulk_insert_mappings(MapaCodigoErp, depara_criar)
+    if depara_alterar:
+        db.bulk_update_mappings(MapaCodigoErp, depara_alterar)
+    depara_novos, depara_atualizados = len(depara_criar), len(depara_alterar)
 
     # O pacote vem com TUDO, inclusive venda de balcão sem nome na nota. Aqui
     # é o único lugar que sabe quem já é cliente, então é aqui que se filtra:
@@ -86,6 +90,7 @@ def aplicar_pacote(db: Session, dados: dict) -> dict:
         "historicoLinhas": historico["linhas"],
         "historicoCriados": historico["criados"],
         "historicoAtualizados": historico["atualizados"],
+        "historicoInalterados": historico.get("inalterados", 0),
         "geradoEm": dados.get("gerado_em"),
         "saiuDeRiscoNomes": relatorio.saiu_de_risco[:20],
         "mudouFaixaExemplos": [
@@ -96,23 +101,58 @@ def aplicar_pacote(db: Session, dados: dict) -> dict:
     return resumo
 
 
+# Campos comparados para decidir se a linha mudou de verdade.
+_CAMPOS_HISTORICO = (
+    "descricao_produto", "quantidade_total", "valor_total",
+    "numero_compras", "ultima_compra",
+)
+
+
 def _aplicar_historico(db: Session, registros: list[dict]) -> dict:
+    """Grava só o que MUDOU, em lote.
+
+    São ~36 mil linhas de histórico, e de um mês para o outro a esmagadora
+    maioria é idêntica — só muda quem comprou no período. A primeira versão
+    reescrevia todas: com o banco a ~330ms de distância, o "confirmar" da tela
+    não terminava (a prévia enganava porque faz rollback e, sem autoflush,
+    nunca chega a enviar as escritas).
+
+    Também não carrega objetos do ORM: lê só as colunas necessárias, porque
+    36 mil objetos completos não cabem confortavelmente na memória do plano
+    gratuito.
+    """
     existentes = {
-        (h.cnpj_normalizado, h.codigo_produto): h
-        for h in db.query(HistoricoItemCliente).all()
+        (linha[0], linha[1]): linha[2:]
+        for linha in db.query(
+            HistoricoItemCliente.cnpj_normalizado,
+            HistoricoItemCliente.codigo_produto,
+            HistoricoItemCliente.id,
+            *(getattr(HistoricoItemCliente, c) for c in _CAMPOS_HISTORICO),
+        ).all()
     }
-    criados = atualizados = 0
+
+    novos, alterados = [], []
     for reg in registros:
         chave = (reg["cnpj_normalizado"], reg["codigo_produto"])
         atual = existentes.get(chave)
         if atual is None:
-            db.add(HistoricoItemCliente(**reg))
-            criados += 1
-        else:
-            for campo, valor in reg.items():
-                setattr(atual, campo, valor)
-            atualizados += 1
-    return {"linhas": len(registros), "criados": criados, "atualizados": atualizados}
+            novos.append(reg)
+            continue
+        id_atual, valores_atuais = atual[0], atual[1:]
+        if tuple(reg[c] for c in _CAMPOS_HISTORICO) != valores_atuais:
+            alterados.append({"id": id_atual, **reg})
+
+    if novos:
+        db.bulk_insert_mappings(HistoricoItemCliente, novos)
+    if alterados:
+        db.bulk_update_mappings(HistoricoItemCliente, alterados)
+
+    return {
+        "linhas": len(registros),
+        "criados": len(novos),
+        "atualizados": len(alterados),
+        "inalterados": len(registros) - len(novos) - len(alterados),
+    }
 
 
 def aplicar_relatorio(db: Session, pedidos: list) -> dict:
