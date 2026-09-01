@@ -93,6 +93,47 @@ class RelatorioAtualizacao:
         }
 
 
+# Quantas linhas por comando nas gravações em massa. Ver TAMANHO_BLOCO em
+# services/atualizacao.py — mesma razão.
+TAMANHO_BLOCO = 2_000
+
+
+def gravar_clientes_em_lote(db: Session, atualizacoes: list[dict]) -> None:
+    """Grava as alterações de cliente em poucos comandos, não um por cliente.
+
+    O ORM emite um UPDATE por objeto alterado. Com 1.257 clientes mudando, isso
+    virava 426 comandos — e o banco fica a ~330ms do servidor, então dava 149
+    segundos só de ida e volta, acima do limite de uma requisição HTTP. Era por
+    isso que o "confirmar" da tela caía enquanto a prévia passava: a prévia não
+    escreve nada.
+
+    Todas as linhas carregam as MESMAS chaves de propósito: assim o SQLAlchemy
+    agrupa tudo em poucos comandos em vez de um por combinação de colunas.
+    """
+    if not atualizacoes:
+        return
+    for inicio in range(0, len(atualizacoes), TAMANHO_BLOCO):
+        db.bulk_update_mappings(Cliente, atualizacoes[inicio:inicio + TAMANHO_BLOCO])
+
+
+def _carregar_carteira(db: Session) -> dict[str, dict]:
+    """Clientes da carteira antiga como dicionários leves, indexados por CNPJ.
+
+    Só as colunas usadas — carregar objetos completos do ORM para depois
+    alterá-los é o que gerava a enxurrada de UPDATEs individuais.
+    """
+    colunas = ("id", "nome", "faixa", "em_risco", "ultima_compra",
+               "primeira_compra", "no_compras", "fat_total")
+    carteira = {}
+    for linha in db.query(Cliente.cnpj, *(getattr(Cliente, c) for c in colunas)).filter(
+        Cliente.origem == OrigemCliente.ANTIGO
+    ):
+        chave = normalizar_cnpj(linha[0])
+        if chave:
+            carteira[chave] = dict(zip(colunas, linha[1:]))
+    return carteira
+
+
 def aplicar_vendas(db: Session, registros: list[dict]) -> RelatorioAtualizacao:
     """Atualiza SÓ os números de venda/RFM dos clientes que já existem.
 
@@ -101,46 +142,46 @@ def aplicar_vendas(db: Session, registros: list[dict]) -> RelatorioAtualizacao:
     decisão humana, nunca criado no escuro (cliente sem endereço não aparece no
     mapa e viraria lixo invisível na base).
 
-    Não dá commit: quem chama decide, e é isso que torna a simulação possível
+    Não dá commit: quem chama decide, e é isso que torna a prévia possível
     (roda tudo, lê o relatório, desfaz).
     """
     relatorio = RelatorioAtualizacao()
-
-    existentes = {}
-    for cliente in db.query(Cliente).filter(Cliente.origem == OrigemCliente.ANTIGO).all():
-        chave = normalizar_cnpj(cliente.cnpj)
-        if chave:
-            existentes[chave] = cliente
+    carteira = _carregar_carteira(db)
 
     vistos = set()
+    atualizacoes = []
     for reg in registros:
         chave = normalizar_cnpj(reg.get("cnpj"))
         if not chave:
             continue
-        cliente = existentes.get(chave)
-        if cliente is None:
+        atual = carteira.get(chave)
+        if atual is None:
             relatorio.sem_cliente_na_carteira.append(reg.get("nome") or chave)
             continue
         vistos.add(chave)
 
-        faixa_antes, risco_antes = cliente.faixa, cliente.em_risco
-        ultima_antes = cliente.ultima_compra
+        novos_valores = {campo: reg[campo] for campo in CAMPOS_VENDAS if campo in reg}
+        # a primeira compra só o banco mestre conhece; o relatório diário não
+        if reg.get("primeira_compra"):
+            novos_valores["primeira_compra"] = reg["primeira_compra"]
 
-        for campo in CAMPOS_VENDAS:
-            if campo in reg:
-                setattr(cliente, campo, reg[campo])
-
-        if faixa_antes != cliente.faixa:
-            relatorio.mudou_faixa.append((cliente.nome, faixa_antes or "—", cliente.faixa or "—"))
-        if risco_antes and not cliente.em_risco:
-            relatorio.saiu_de_risco.append(cliente.nome)
-        elif not risco_antes and cliente.em_risco:
-            relatorio.entrou_em_risco.append(cliente.nome)
-        if ultima_antes and cliente.ultima_compra and cliente.ultima_compra > ultima_antes:
+        if reg.get("faixa") != atual["faixa"]:
+            relatorio.mudou_faixa.append(
+                (atual["nome"], atual["faixa"] or "—", reg.get("faixa") or "—")
+            )
+        if atual["em_risco"] and not reg.get("em_risco"):
+            relatorio.saiu_de_risco.append(atual["nome"])
+        elif not atual["em_risco"] and reg.get("em_risco"):
+            relatorio.entrou_em_risco.append(atual["nome"])
+        if (atual["ultima_compra"] and reg.get("ultima_compra")
+                and reg["ultima_compra"] > atual["ultima_compra"]):
             relatorio.recencia_corrigida += 1
+
+        atualizacoes.append({"id": atual["id"], **novos_valores})
         relatorio.atualizados += 1
 
-    relatorio.sem_venda_no_periodo = len(set(existentes) - vistos)
+    gravar_clientes_em_lote(db, atualizacoes)
+    relatorio.sem_venda_no_periodo = len(set(carteira) - vistos)
     return relatorio
 
 
@@ -271,13 +312,17 @@ def aplicar_relatorio_vendas(
 
 
 def _recalcular_rfm_da_carteira(db: Session, clientes, faturamento_minimo_risco: float) -> None:
-    """Recalcula notas, faixa e risco de toda a carteira a partir do que está
-    gravado em cada cliente. Usado depois de uma importação incremental."""
+    """Recalcula notas, faixa e risco de toda a carteira e grava em lote.
+
+    Precisa ser em lote pelo mesmo motivo de gravar_clientes_em_lote: o RFM é
+    por quintil, então uma importação diária mexe na nota de quase todo mundo,
+    e um UPDATE por cliente não caberia no tempo de uma requisição.
+    """
     from . import rfm
 
     registros = [
         {
-            "_cliente": c,
+            "id": c.id,
             "no_compras": c.no_compras,
             "fat_total": c.fat_total,
             "primeira_compra": c.primeira_compra,
@@ -286,8 +331,7 @@ def _recalcular_rfm_da_carteira(db: Session, clientes, faturamento_minimo_risco:
         for c in clientes
     ]
     rfm.calcular(registros, faturamento_minimo_risco=faturamento_minimo_risco)
-    for reg in registros:
-        cliente = reg.pop("_cliente")
-        for campo in CAMPOS_VENDAS:
-            if campo in reg:
-                setattr(cliente, campo, reg[campo])
+    gravar_clientes_em_lote(db, [
+        {"id": reg["id"], **{campo: reg[campo] for campo in CAMPOS_VENDAS if campo in reg}}
+        for reg in registros
+    ])

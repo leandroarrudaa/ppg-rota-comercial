@@ -84,14 +84,9 @@ def aplicar_pacote(db: Session, dados: dict) -> dict:
     rfm.calcular(registros, faturamento_minimo_risco=_piso_risco(db))
     relatorio = importacao.aplicar_vendas(db, registros)
 
-    # primeira_compra não faz parte de CAMPOS_VENDAS (a atualização diária não
-    # sabe a data real da primeira compra), mas o pacote sabe — e a cadência
-    # depende dela.
-    por_cnpj = {reg["cnpj"]: reg for reg in registros}
-    for cliente in db.query(Cliente).filter(Cliente.cnpj.isnot(None)).all():
-        reg = por_cnpj.get(normalizar_cnpj(cliente.cnpj))
-        if reg and reg.get("primeira_compra"):
-            cliente.primeira_compra = reg["primeira_compra"]
+    # primeira_compra vem junto no mesmo lote de aplicar_vendas — antes havia
+    # aqui uma segunda varredura da carteira inteira só para ela, que carregava
+    # todos os clientes de novo e gerava mais um UPDATE por linha.
 
     historico = _aplicar_historico(db, dados.get("historico") or [])
 
