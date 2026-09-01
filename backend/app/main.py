@@ -1,6 +1,7 @@
 """Aplicação FastAPI da plataforma de representação comercial PPG."""
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -110,5 +111,17 @@ def saude():
 
 @app.get("/api/diagnostico")
 def diagnostico():
-    """Estado real das dependências — para investigar problema em produção."""
-    return {"app": "ok", "banco": "ok" if checar_conexao() else "indisponivel"}
+    """Estado real das dependências — para investigar problema em produção.
+
+    Devolve também QUAL versão do código está rodando. Sem isso não havia como
+    responder "o deploy já entrou?" quando a mudança era só interna (sem rota
+    nova, sem texto novo) — ficava-se olhando o app responder "ok" sem saber se
+    era o código velho ou o novo.
+
+    A variável vem do próprio Render; fora dele fica "desenvolvimento".
+    """
+    return {
+        "app": "ok",
+        "banco": "ok" if checar_conexao() else "indisponivel",
+        "versao": (os.getenv("RENDER_GIT_COMMIT") or "")[:7] or "desenvolvimento",
+    }
