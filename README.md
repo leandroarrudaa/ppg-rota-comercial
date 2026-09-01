@@ -27,11 +27,16 @@ Duas origens, com precedência clara: **o banco mestre sobrepõe o relatório di
 | Relatório de vendas do ERP | Todo dia | Exporte o CSV e envie em **Gestão → Importar** |
 
 O **banco mestre** (gerado dos XMLs de NFe) é a fonte mais completa: tem o CNPJ real e o histórico
-inteiro. Como o arquivo tem ~139 MB, um atalho local extrai só o que interessa (~1 MB):
+inteiro. Como o arquivo tem ~139 MB, um passo local extrai só o que interessa (~1 MB). No Windows,
+duplo clique em **`Preparar Pacote do Banco Mestre.bat`** — ele gera o arquivo e abre a pasta nele.
+Por linha de comando:
 
 ```bash
 python backend/scripts/preparar_pacote.py
 ```
+
+Dentro do Claude Code, a skill `pacote-banco-mestre` faz o mesmo e ainda confere se os números do
+pacote batem com o esperado antes de mandar subir.
 
 O **relatório do ERP** ("Pedidos com Produtos — Detalhado", em CSV) não traz CNPJ nenhum: o cliente
 aparece como `729 - RAZÃO SOCIAL`, um código interno. Por isso o pacote do banco mestre também
