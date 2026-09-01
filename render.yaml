@@ -4,7 +4,15 @@ services:
   - type: web
     name: ppg-rota-comercial-backend
     runtime: python
-    plan: free
+    # Starter (pago) e nao free: o plano gratuito hiberna apos ~15min sem uso,
+    # e o vendedor esperando ~50s na frente do cliente nao e aceitavel. O yaml
+    # dizia "free" enquanto o servico real ja era Starter — corrigido para as
+    # duas coisas nao divergirem de novo.
+    #
+    # Atencao ao dimensionar importacao: Starter tem 512 MB de RAM, e a
+    # importacao do banco mestre ja derrubou o processo uma vez por carregar
+    # dezenas de milhares de linhas de uma vez (ver services/atualizacao.py).
+    plan: starter
     region: oregon
     rootDir: backend
     buildCommand: pip install -r requirements.txt

@@ -26,6 +26,18 @@ from .cnpj import normalizar_cnpj
 TIPO_PACOTE = "banco-mestre"
 TIPO_RELATORIO = "relatorio-vendas"
 
+# Quantas linhas por vez nas gravações em massa. O serviço tem 512 MB de RAM e
+# a primeira importação do banco mestre insere ~36 mil linhas de histórico —
+# mandar tudo num comando só já derrubou o processo em produção uma vez. Em
+# blocos, o pico de memória fica limitado e a transação continua sendo uma só
+# (nada é confirmado no meio do caminho).
+TAMANHO_BLOCO = 2_000
+
+
+def _em_blocos(registros: list[dict]):
+    for inicio in range(0, len(registros), TAMANHO_BLOCO):
+        yield registros[inicio:inicio + TAMANHO_BLOCO]
+
 
 def _piso_risco(db: Session) -> float:
     return config_svc.obter_numero(db, config_svc.FATURAMENTO_MINIMO_RISCO)
@@ -53,10 +65,10 @@ def aplicar_pacote(db: Session, dados: dict) -> dict:
             depara_criar.append({"codigo": codigo, "cnpj": cnpj})
         elif atual != cnpj:
             depara_alterar.append({"codigo": codigo, "cnpj": cnpj})
-    if depara_criar:
-        db.bulk_insert_mappings(MapaCodigoErp, depara_criar)
-    if depara_alterar:
-        db.bulk_update_mappings(MapaCodigoErp, depara_alterar)
+    for bloco in _em_blocos(depara_criar):
+        db.bulk_insert_mappings(MapaCodigoErp, bloco)
+    for bloco in _em_blocos(depara_alterar):
+        db.bulk_update_mappings(MapaCodigoErp, bloco)
     depara_novos, depara_atualizados = len(depara_criar), len(depara_alterar)
 
     # O pacote vem com TUDO, inclusive venda de balcão sem nome na nota. Aqui
@@ -142,10 +154,10 @@ def _aplicar_historico(db: Session, registros: list[dict]) -> dict:
         if tuple(reg[c] for c in _CAMPOS_HISTORICO) != valores_atuais:
             alterados.append({"id": id_atual, **reg})
 
-    if novos:
-        db.bulk_insert_mappings(HistoricoItemCliente, novos)
-    if alterados:
-        db.bulk_update_mappings(HistoricoItemCliente, alterados)
+    for bloco in _em_blocos(novos):
+        db.bulk_insert_mappings(HistoricoItemCliente, bloco)
+    for bloco in _em_blocos(alterados):
+        db.bulk_update_mappings(HistoricoItemCliente, bloco)
 
     return {
         "linhas": len(registros),
