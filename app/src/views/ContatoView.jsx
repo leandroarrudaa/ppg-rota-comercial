@@ -46,7 +46,7 @@ export default function ContatoView({ clientes }) {
         </div>
 
         <div className="filtro-grupo">
-          <span className="filtro-titulo">Contatos por dia: <b style={{ color: "var(--ink)" }}>{porDia}</b></span>
+          <span className="filtro-titulo">Contatos por dia: <b>{porDia}</b></span>
           <input type="range" min="10" max="50" value={porDia} onChange={(e) => { setPorDia(+e.target.value); setDia(0); }} className="slider" />
         </div>
 

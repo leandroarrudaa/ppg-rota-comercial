@@ -425,6 +425,11 @@ select.input { cursor: pointer; }
 .painel .muted { color: rgba(255, 255, 255, 0.6); }
 .painel .faint { color: rgba(255, 255, 255, 0.42); }
 .painel .filtro-titulo { color: rgba(255, 255, 255, 0.5); }
+/* O valor dentro do rótulo (ex.: "Visitas por dia: 12") vinha com a cor de
+   texto para fundo CLARO, fixada no componente — dentro do painel escuro ele
+   ficava preto sobre azul-marinho, quase ilegível. Amarelo é a cor que o
+   painel já usa para destacar número (ver .resumo-item.destaque abaixo). */
+.painel .filtro-titulo b { color: var(--yellow); }
 
 /* campos (busca + cidade) */
 .painel .input {
@@ -566,8 +571,11 @@ select.input { cursor: pointer; }
 }
 .ficha-tabela-itens td { padding: 7px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-soft); }
 .ficha-tabela-itens td:last-child, .ficha-tabela-itens th:last-child { text-align: right; font-weight: 600; color: var(--ink); }
-.ficha-tabela-itens th.ordenavel { cursor: pointer; user-select: none; white-space: nowrap; }
-.ficha-tabela-itens th.ordenavel:hover { color: var(--ink-soft); }
+/* Cabeçalho de tabela que ordena ao clique. Regra única para as duas tabelas
+   do app (histórico da ficha e carteira da gestão) — antes ela existia só
+   para a ficha, e a segunda tabela ficaria com o clique invisível. */
+th.ordenavel { cursor: pointer; user-select: none; white-space: nowrap; }
+th.ordenavel:hover { color: var(--ink-soft); }
 .ficha-paginacao { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; }
 
 /* ---------- Promessas pendentes ---------- */
@@ -812,4 +820,17 @@ select.input { cursor: pointer; }
   .carteira-filtros { grid-template-columns: 1fr; }
   .carteira-tabela { font-size: 13px; }
   .carteira-tabela th, .carteira-tabela td { padding: 8px; }
+}
+
+/* As três notas do RFM sob a nota total. Fonte de largura fixa para R/F/M
+   ficarem alinhados de uma linha para a outra, e cinza para não competirem
+   com o número que importa primeiro (a nota somada). */
+.carteira-rfm {
+  display: flex;
+  gap: 5px;
+  justify-content: flex-end;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+  color: var(--faint);
+  margin-top: 1px;
 }

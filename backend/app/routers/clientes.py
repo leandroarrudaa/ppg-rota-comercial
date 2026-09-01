@@ -80,6 +80,7 @@ def listar_admin(
     semLocalizacao: bool = False,
     vinculo: str | None = Query(default=None, description="com | sem"),
     ordenar: str = "faturamento",
+    direcao: str = Query(default="desc", pattern="^(asc|desc)$"),
     pagina: int = Query(default=1, ge=1),
     tamanho: int = Query(default=50, ge=1, le=200),
     _admin: Usuario = Depends(auth.requer_admin),
@@ -90,7 +91,7 @@ def listar_admin(
     registros, total = svc.listar_admin(
         db, busca=busca, faixa=faixa, cidade=cidade, origem=origem, status=status,
         aceita_visita=aceitaVisita, sem_localizacao=semLocalizacao, vinculo=vinculo,
-        ordenar=ordenar, pagina=pagina, tamanho=tamanho,
+        ordenar=ordenar, direcao=direcao, pagina=pagina, tamanho=tamanho,
     )
     pendentes = visitas_svc.ids_com_promessa_pendente(db, [c.id for c in registros])
     return ClientesPagina(

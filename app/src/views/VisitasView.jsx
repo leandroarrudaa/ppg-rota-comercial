@@ -126,7 +126,7 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
         </div>
 
         <div className="filtro-grupo">
-          <span className="filtro-titulo">Visitas por dia: <b style={{ color: "var(--ink)" }}>{capacidade}</b></span>
+          <span className="filtro-titulo">Visitas por dia: <b>{capacidade}</b></span>
           <input type="range" min="5" max="25" value={capacidade} onChange={(e) => setCapacidade(+e.target.value)} className="slider" />
         </div>
 

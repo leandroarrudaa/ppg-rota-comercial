@@ -76,7 +76,7 @@ def test_pagina_e_conta_o_total_separadamente(db):
 
 
 def test_ordena_por_faturamento_com_nulos_no_fim(db):
-    registros, _ = svc.listar_admin(db, status="todos", ordenar="faturamento")
+    registros, _ = svc.listar_admin(db, status="todos", ordenar="faturamento", direcao="desc")
     faturamentos = [c.fat_total for c in registros if c.fat_total is not None]
     assert faturamentos == sorted(faturamentos, reverse=True)
 
@@ -213,3 +213,67 @@ def test_cliente_sai_com_a_agenda_na_resposta_da_api(cliente_http, token, db):
     assert corpo, "a carteira de teste não pode estar vazia"
     assert "ultimaVisita" in corpo[0]
     assert "proximaVisita" in corpo[0]
+
+
+def test_toda_coluna_ordena_nos_dois_sentidos(db):
+    """O cabeçalho da tabela é clicável e o segundo clique inverte, então cada
+    coluna precisa das duas direções no servidor — ordenar só a página visível
+    daria uma ordem falsa sobre a carteira inteira."""
+    # dados próprios: os clientes da fixture não têm nota nem data de compra,
+    # e com valores iguais as duas direções dariam a mesma ordem sem provar nada
+    for i, (nome, cidade, fat, score, dia) in enumerate([
+        ("Alfa LTDA", "Araucaria", 1000.0, 5, date(2026, 1, 10)),
+        ("Beta LTDA", "Curitiba", 50000.0, 12, date(2026, 6, 20)),
+        ("Gama LTDA", "Ponta Grossa", 9000.0, 9, date(2026, 3, 5)),
+    ]):
+        db.add(Cliente(nome=nome, cidade=cidade, cnpj=f"60.000.00{i}/0001-00",
+                       origem=OrigemCliente.ANTIGO, fat_total=fat, rfm_score=score,
+                       ultima_compra=dia, lat=-25.0, lng=-50.0))
+    db.commit()
+
+    for campo in ("nome", "cidade", "faturamento", "rfm", "ultimaCompra"):
+        subindo, _ = svc.listar_admin(db, ordenar=campo, direcao="asc", status="todos")
+        descendo, _ = svc.listar_admin(db, ordenar=campo, direcao="desc", status="todos")
+        assert [c.id for c in subindo] != [c.id for c in descendo], campo
+
+
+def test_nulos_ficam_no_fim_nos_dois_sentidos(db):
+    """Cliente sem faturamento não é 'o menor', é 'não sei' — no topo da lista
+    ele só atrapalharia quem está procurando o maior ou o menor de verdade."""
+    db.add(Cliente(nome="Sem Numero", origem=OrigemCliente.NOVO, fat_total=None))
+    db.commit()
+    for direcao in ("asc", "desc"):
+        registros, _ = svc.listar_admin(db, ordenar="faturamento", direcao=direcao, status="todos")
+        assert registros[-1].fat_total is None, direcao
+
+
+def test_ordenar_por_nota_rfm(db):
+    """A nota agora aparece na tela de gestão, então precisa dar para ordenar
+    por ela — faturamento alto com nota baixa é justamente o que se procura."""
+    for i, score in enumerate([3, 15, 9]):
+        db.add(Cliente(nome=f"Empresa {score}", cnpj=f"70.000.00{i}/0001-00",
+                       origem=OrigemCliente.ANTIGO, rfm_score=score,
+                       r=1, f=1, m=1, lat=-25.0, lng=-50.0))
+    db.commit()
+
+    registros, _ = svc.listar_admin(db, ordenar="rfm", direcao="desc", status="todos")
+    notas = [c.rfm_score for c in registros if c.rfm_score is not None]
+    assert notas == sorted(notas, reverse=True)
+    assert notas[0] == 15
+
+
+def test_cliente_sem_nota_nao_quebra_a_ordenacao(db):
+    """Lead cadastrado em campo não tem RFM — vai para o fim, não estoura."""
+    db.add(Cliente(nome="Lead sem nota", origem=OrigemCliente.NOVO, rfm_score=None))
+    db.commit()
+    registros, _ = svc.listar_admin(db, ordenar="rfm", direcao="desc", status="todos")
+    assert registros[-1].rfm_score is None
+
+
+def test_a_api_devolve_as_tres_notas_separadas(cliente_http, token):
+    """A tela mostra R, F e M individualmente, não só o total — é o que
+    explica POR QUE o cliente está na faixa em que está."""
+    corpo = cliente_http.get("/api/clientes/admin", headers=_auth(token)).json()
+    primeiro = corpo["itens"][0]
+    for campo in ("R", "F", "M", "score"):
+        assert campo in primeiro

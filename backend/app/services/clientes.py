@@ -168,6 +168,7 @@ def listar_admin(
     sem_localizacao: bool = False,
     vinculo: str | None = None,     # com | sem
     ordenar: str = "faturamento",
+    direcao: str = "desc",
     pagina: int = 1,
     tamanho: int = 50,
 ) -> tuple[list[Cliente], int]:
@@ -216,13 +217,20 @@ def listar_admin(
 
     total = q.count()
 
-    ordenacoes = {
-        "faturamento": Cliente.fat_total.desc().nullslast(),
-        "nome": Cliente.nome.asc(),
-        "recencia": Cliente.recencia_dias.asc().nullslast(),
-        "atualizacao": Cliente.atualizado_em.desc(),
+    # A ordenação vem do clique no cabeçalho da tabela, então cada coluna
+    # precisa das duas direções. Nulo sempre no fim, nos dois sentidos: cliente
+    # sem faturamento ou sem nota não é "o menor", é "não sei" — e no topo da
+    # lista ele só atrapalharia.
+    colunas = {
+        "nome": Cliente.nome,
+        "cidade": Cliente.cidade,
+        "faturamento": Cliente.fat_total,
+        "rfm": Cliente.rfm_score,
+        "ultimaCompra": Cliente.ultima_compra,
     }
-    q = q.order_by(ordenacoes.get(ordenar, ordenacoes["faturamento"]))
+    coluna = colunas.get(ordenar, colunas["faturamento"])
+    ordenacao = coluna.asc() if direcao == "asc" else coluna.desc()
+    q = q.order_by(ordenacao.nullslast(), Cliente.id)
 
     registros = q.offset((pagina - 1) * tamanho).limit(tamanho).all()
     return registros, total
