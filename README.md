@@ -7,54 +7,96 @@ quem são os melhores, e qual a rota/contato do dia.
 ## O que a plataforma faz
 
 - **Mapa da carteira** — todos os clientes plotados, coloridos por faixa RFM (Ouro / Prata / Bronze),
-  com filtros por faixa, risco, cidade e busca. Clique no pino abre nome, endereço e telefone.
-- **Plano de Visitas** — clientes ativos, agrupados por proximidade e valor, com rota de estrada
-  real (OSRM), ordem de visita otimizada, km/tempo e recomendação de ação por cliente.
-- **Plano de Contato** — clientes adormecidos numa fila de ligações priorizada, com telefone e
-  script de reativação (objetivo: reabrir relacionamento e agendar visita).
-- **Relatórios em PDF** — rota do dia e lista de contatos, com a identidade visual da PPG.
+  com filtros por faixa, risco, cidade e busca.
+- **Plano da Semana** — 5 dias de rota presencial, cada um geograficamente compacto, equilibrando
+  valor do cliente e quilometragem. **Não repete quem foi visitado há pouco**: respeita a data de
+  retorno que o vendedor combinou ao fechar a última visita.
+- **Rota do Dia** — seleção dos clientes da região, rota de estrada real (OSRM), e o fluxo de campo:
+  abrir visita, finalizar, preencher o relatório (bloqueante) e registrar promessas.
+- **Relatórios** — o que o time fez, por período e por vendedor.
+- **Gestão** (admin) — lista completa da carteira, vínculo de CNPJs da mesma empresa, inativação,
+  importação de dados e ajustes das regras do negócio.
+
+## Atualização da carteira
+
+Duas origens, com precedência clara: **o banco mestre sobrepõe o relatório diário**.
+
+| Origem | Quando | Como |
+|---|---|---|
+| Pacote do banco mestre | 1× por mês | Gere o pacote no PC do escritório e envie em **Gestão → Importar** |
+| Relatório de vendas do ERP | Todo dia | Exporte o CSV e envie em **Gestão → Importar** |
+
+O **banco mestre** (gerado dos XMLs de NFe) é a fonte mais completa: tem o CNPJ real e o histórico
+inteiro. Como o arquivo tem ~139 MB, um atalho local extrai só o que interessa (~1 MB):
+
+```bash
+python backend/scripts/preparar_pacote.py
+```
+
+O **relatório do ERP** ("Pedidos com Produtos — Detalhado", em CSV) não traz CNPJ nenhum: o cliente
+aparece como `729 - RAZÃO SOCIAL`, um código interno. Por isso o pacote do banco mestre também
+carrega o de-para `código → CNPJ` — é ele que torna o arquivo diário aproveitável. A maior parte do
+relatório é venda de balcão e pessoa física, que nunca fez parte da carteira de visitas e fica de fora.
+
+Toda importação mostra **uma prévia antes de gravar** e enviar o mesmo arquivo duas vezes não conta
+em dobro (cada pedido é registrado pelo número).
+
+Alternativa por linha de comando, para atualizar direto do banco mestre:
+
+```bash
+python backend/scripts/recarregar_do_banco_mestre.py --simular   # só mostra o que mudaria
+python backend/scripts/recarregar_do_banco_mestre.py --com-historico
+```
+
+No Windows há o atalho de um clique **`Atualizar Carteira.bat`**, que roda a simulação, mostra os
+números e só grava depois de confirmação. Ele avisa em qual banco vai gravar — local ou produção,
+conforme o `backend/.env`.
 
 ## Stack
 
-React + Vite + Leaflet (mapa OpenStreetMap/CARTO). Sem back-end: os dados ficam em
-`app/public/clientes.json`, gerados a partir da planilha pelos scripts em `scripts/`.
+- **Frontend**: React + Vite + Leaflet (mapa OpenStreetMap/CARTO)
+- **Backend**: FastAPI + SQLAlchemy — SQLite no desenvolvimento, PostgreSQL (Supabase) em produção
+- **Hospedagem**: Render (API + site estático)
 
 ## Como rodar localmente
 
-Pré-requisito: **Node.js 18+** (recomendado 20 LTS) — https://nodejs.org
+Pré-requisitos: **Node.js 18+** e **Python 3.11+**.
 
 ```bash
-cd app
-npm install
-npm run dev
+cd backend && pip install -r requirements.txt
+python -m uvicorn app.main:app --port 8090
 ```
 
-Abra o link que aparecer no terminal (ex.: http://localhost:5173).
+```bash
+cd app && npm install && npm run dev
+```
+
+No Windows, **`PPG Rota Comercial.bat`** sobe os dois e abre o navegador.
+
+## Testes
+
+```bash
+cd backend && pytest
+```
 
 ## Estrutura
 
 ```
-app/            # aplicação React (o que roda no navegador)
-  src/views/    # Mapa, Plano de Visitas, Plano de Contato
-  src/lib/      # RFM/rota, recomendação, PDF, formatação
-  public/clientes.json   # base já processada que a plataforma consome
-scripts/        # pipeline de dados (Python): limpeza, RFM, geocodificação, enriquecimento
-dados/          # planilha de origem
-saida/          # base mestra + caches de geocodificação/CNPJ
-```
-
-## Pipeline de dados (opcional, só se for reprocessar a base)
-
-Requer Python 3 com `pandas`, `openpyxl`, `requests`.
-
-```bash
-python3 scripts/01_processar_base.py   # limpeza + RFM + faixas
-python3 scripts/02_geocodificar.py     # endereços -> lat/lng (usa cache)
-python3 scripts/04_enriquecer_cnpj.py  # porte/telefone via BrasilAPI (usa cache)
-python3 scripts/03_gerar_dados.py       # gera app/public/clientes.json
+app/                      # aplicação React
+  src/views/              # Mapa, Plano da Semana, Rota do Dia, Relatórios, Gestão
+  src/lib/                # roteirização, recomendação, PDF, formatação
+backend/
+  app/models.py           # tabelas
+  app/routers/            # rotas da API
+  app/services/           # regras de negócio
+  app/services/fontes/    # leitura do banco mestre, do relatório do ERP e do pacote
+  scripts/                # carga e atualização por linha de comando
+  tests/                  # pytest
+scripts/                  # pipeline original da planilha (histórico)
 ```
 
 ## ⚠️ Dados sensíveis
 
 A base contém **dados reais de clientes** (empresas, CNPJs, telefones, faturamento).
-Mantenha este repositório **privado**. Não publique nem compartilhe fora dos colaboradores autorizados.
+Mantenha este repositório **privado**. Cópias do banco (`*.db`) e pacotes de atualização
+(`*.ppg`) estão no `.gitignore` e **não podem** ser commitados.
