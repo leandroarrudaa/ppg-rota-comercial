@@ -9,9 +9,11 @@ from ..models import Cliente, OrigemCliente, StatusCliente
 from ..schemas import ClienteAtualizar, ClienteCriarManual, ClienteOut
 
 
-def para_saida(c: Cliente, tem_promessa: bool = False) -> ClienteOut:
+def para_saida(c: Cliente, tem_promessa: bool = False, agenda: dict | None = None) -> ClienteOut:
     """Converte o modelo do banco pro formato que o frontend já consome
     (mesmos nomes de campo do antigo clientes.json)."""
+    from .visitas import proxima_visita
+    ultima_visita, proxima = proxima_visita(agenda, c.faixa)
     return ClienteOut(
         id=c.id,
         cnpj=c.cnpj,
@@ -48,6 +50,8 @@ def para_saida(c: Cliente, tem_promessa: bool = False) -> ClienteOut:
         contatoCelular=c.contato_celular,
         clienteMestreId=c.cliente_mestre_id,
         temPromessaPendente=tem_promessa,
+        ultimaVisita=ultima_visita,
+        proximaVisita=proxima,
     )
 
 
@@ -150,3 +154,91 @@ def atualizar(cliente: Cliente, dados: ClienteAtualizar) -> Cliente:
         cliente.aceita_visita = aceita_final
         cliente.motivo_recusa_visita = motivo_final
     return cliente
+
+
+def listar_admin(
+    db: Session,
+    *,
+    busca: str | None = None,
+    faixa: str | None = None,
+    cidade: str | None = None,
+    origem: str | None = None,
+    status: str | None = None,      # ativo | inativo | todos
+    aceita_visita: bool | None = None,
+    sem_localizacao: bool = False,
+    vinculo: str | None = None,     # com | sem
+    ordenar: str = "faturamento",
+    pagina: int = 1,
+    tamanho: int = 50,
+) -> tuple[list[Cliente], int]:
+    """Listagem de gestão: TUDO é opcional e nada é escondido por padrão.
+
+    Diferente de `listar` (que serve o mapa e a rota, e por isso esconde
+    inativo e quem não tem coordenada), aqui o gerente precisa enxergar
+    exatamente o que existe na base — inclusive o que está quebrado, que é o
+    que ele veio consertar.
+
+    Devolve (página, total) — a contagem é separada porque a carteira tem
+    milhares de linhas e mandar tudo para o navegador a cada filtro seria
+    lento no celular e caro no banco.
+    """
+    q = db.query(Cliente)
+
+    if status == "ativo":
+        q = q.filter(Cliente.status == StatusCliente.ATIVO)
+    elif status == "inativo":
+        q = q.filter(Cliente.status == StatusCliente.INATIVO)
+    # "todos" (ou nada) não filtra — é como se acha o que foi inativado
+
+    if busca:
+        padrao = f"%{busca.strip()}%"
+        q = q.filter(or_(
+            Cliente.nome.ilike(padrao),
+            Cliente.cnpj.ilike(padrao),
+            Cliente.cidade.ilike(padrao),
+        ))
+    if faixa:
+        q = q.filter(Cliente.faixa == faixa)
+    if cidade:
+        q = q.filter(Cliente.cidade == cidade)
+    if origem:
+        q = q.filter(Cliente.origem == origem)
+    if aceita_visita is not None:
+        q = q.filter(Cliente.aceita_visita.is_(aceita_visita))
+    if sem_localizacao:
+        # quem não tem coordenada não aparece no mapa nem entra em rota:
+        # é a fila de trabalho de quem precisa marcar o pino
+        q = q.filter(or_(Cliente.lat.is_(None), Cliente.lng.is_(None)))
+    if vinculo == "com":
+        q = q.filter(Cliente.cliente_mestre_id.isnot(None))
+    elif vinculo == "sem":
+        q = q.filter(Cliente.cliente_mestre_id.is_(None))
+
+    total = q.count()
+
+    ordenacoes = {
+        "faturamento": Cliente.fat_total.desc().nullslast(),
+        "nome": Cliente.nome.asc(),
+        "recencia": Cliente.recencia_dias.asc().nullslast(),
+        "atualizacao": Cliente.atualizado_em.desc(),
+    }
+    q = q.order_by(ordenacoes.get(ordenar, ordenacoes["faturamento"]))
+
+    registros = q.offset((pagina - 1) * tamanho).limit(tamanho).all()
+    return registros, total
+
+
+def alterar_status_em_lote(db: Session, cliente_ids: list[int], status: StatusCliente) -> int:
+    """Inativa/reativa vários clientes de uma vez.
+
+    Em lote porque o servidor fica nos EUA e o banco no Brasil: uma chamada
+    por cliente faria o gerente esperar ~330ms vezes o número de linhas
+    selecionadas — inviável para limpar a lista, que é justamente o caso de
+    uso. Não dá commit.
+    """
+    if not cliente_ids:
+        return 0
+    registros = db.query(Cliente).filter(Cliente.id.in_(cliente_ids)).all()
+    for cliente in registros:
+        cliente.status = status
+    return len(registros)

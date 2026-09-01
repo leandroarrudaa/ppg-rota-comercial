@@ -679,3 +679,137 @@ select.input { cursor: pointer; }
   .visita-andamento-acoes { width: 100%; }
   .visita-andamento-acoes .btn { flex: 1; justify-content: center; }
 }
+
+/* ---------- área de gestão (admin) ---------- */
+.gestao { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.gestao-cabecalho {
+  padding: 16px 24px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.gestao-corpo { flex: 1; overflow-y: auto; padding: 18px 24px 32px; }
+
+/* ---------- lista completa da carteira ---------- */
+.carteira-filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+/* a busca é o filtro mais usado — ocupa a linha inteira em telas largas */
+.carteira-filtros > .input:first-child { grid-column: 1 / -1; }
+.carteira-check {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--muted);
+}
+.carteira-aviso {
+  padding: 8px 12px; border-radius: 10px; margin-bottom: 10px;
+  background: #e9f7ef; border: 1px solid #b7e0c6; font-size: 13px;
+}
+.carteira-barra {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px; margin-bottom: 10px;
+}
+.carteira-acoes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.carteira-acoes .btn { font-size: 13px; padding: 0.45rem 0.9rem; }
+
+/* Tabela larga: rola dentro da própria caixa, nunca empurra a página. */
+.carteira-tabela-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.carteira-tabela { width: 100%; border-collapse: collapse; font-size: 14px; }
+.carteira-tabela th, .carteira-tabela td {
+  padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.carteira-tabela th {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--faint); font-weight: 700; white-space: nowrap;
+  position: sticky; top: 0; background: var(--surface-2); z-index: 1;
+}
+.carteira-tabela td.num, .carteira-tabela th.num { text-align: right; white-space: nowrap; }
+.carteira-tabela tr:last-child td { border-bottom: none; }
+.carteira-tabela tr.marcada { background: #eef3ff; }
+.carteira-nome { font-weight: 600; }
+.carteira-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.carteira-paginacao {
+  display: flex; align-items: center; justify-content: center;
+  gap: 14px; margin-top: 14px;
+}
+
+/* ---------- importação ---------- */
+.importar { max-width: 780px; display: flex; flex-direction: column; gap: 14px; }
+.importar-origens { display: flex; gap: 10px; flex-wrap: wrap; }
+.importar-origem {
+  flex: 1; min-width: 220px; text-align: left;
+  padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--surface);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.importar-origem.on { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(30,45,110,.12); }
+.importar-envio { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.importar-progresso {
+  height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden;
+}
+.importar-progresso > div { height: 100%; background: var(--primary); transition: width .2s ease; }
+
+.importar-previa {
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px; background: var(--surface);
+}
+/* Concluída ganha verde: a diferença entre "vai mudar" e "mudou" precisa ser
+   visível de relance, senão o gerente não sabe se já gravou. */
+.importar-previa.concluida { border-color: #b7e0c6; background: #f4fbf6; }
+.importar-previa h4 { margin: 0 0 12px; }
+.previa-grade {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;
+}
+.previa-item {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 10px 12px; border-radius: 10px; background: var(--surface-2);
+}
+.previa-item > span { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--faint); }
+.previa-item > b { font-size: 19px; }
+.previa-item > small { font-size: 11px; line-height: 1.3; }
+.previa-item.destaque { background: #eef3ff; }
+.previa-lista { margin-top: 14px; }
+.previa-lista ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+.previa-lista li { margin-bottom: 2px; }
+.importar-confirmar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line);
+}
+.importar-historico { margin-top: 8px; }
+.importar-historico ul { list-style: none; margin: 6px 0 0; padding: 0; font-size: 13px; }
+.importar-historico li { padding: 5px 0; border-bottom: 1px solid var(--line); }
+
+/* ---------- ajustes ---------- */
+.ajustes { max-width: 620px; display: flex; flex-direction: column; gap: 22px; }
+.ajuste-item { display: flex; flex-direction: column; gap: 5px; }
+.ajuste-campo { display: flex; gap: 8px; align-items: center; }
+.ajuste-campo .input { max-width: 200px; }
+
+/* ---------- agenda de visita no plano da semana ---------- */
+/* Vive dentro do painel escuro do plano, mas com fundo claro — a cor do texto
+   PRECISA ser explícita: herdando a do painel, ficava branco sobre branco e a
+   caixa aparecia vazia. */
+.agenda-chave {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 13px; padding: 10px 12px; border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  color: var(--ink);
+}
+/* `.painel .faint` é mais específico que `.agenda-chave small`, e pinta de
+   branco para o fundo escuro do painel — aqui o fundo é claro, então a
+   regra precisa ser mais específica que ela. */
+.agenda-chave small.faint { display: block; color: var(--muted); }
+
+@media (max-width: 720px) {
+  .gestao-cabecalho, .gestao-corpo { padding-left: 14px; padding-right: 14px; }
+  .carteira-filtros { grid-template-columns: 1fr; }
+  .carteira-tabela { font-size: 13px; }
+  .carteira-tabela th, .carteira-tabela td { padding: 8px; }
+}

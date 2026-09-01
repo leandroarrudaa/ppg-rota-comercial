@@ -19,7 +19,55 @@ export function distKm(a, b) {
 export function valorEstrategico(c) {
   const base = { Ouro: 100, Prata: 45, Bronze: 18 }[c.faixa] || 10;
   const risco = c.emRisco ? 70 : 0; // reativar quem esfriou é prioridade
-  return base + risco;
+  return base + risco + bonusAtraso(c);
+}
+
+// ---------------------------------------------------------------
+// Agenda de visita. O backend calcula proximaVisita a partir do que o
+// vendedor combinou no relatório ("voltar em X dias"); sem combinação, cai
+// na cadência da faixa. Nulo = nunca visitado.
+// ---------------------------------------------------------------
+
+// dias de atraso em relação à data em que valia voltar (0 se ainda não venceu)
+export function diasDeAtraso(c, hoje = new Date()) {
+  if (!c.proximaVisita) return 0; // nunca visitado: não está "atrasado", está livre
+  const alvo = new Date(c.proximaVisita + "T00:00:00");
+  return Math.max(0, Math.round((hoje - alvo) / 86400000));
+}
+
+// Cliente entra no plano se nunca foi visitado ou se já passou da data de
+// voltar. É isto que impede o mesmo cliente de reaparecer na semana seguinte
+// de uma visita — o problema que motivou toda esta parte.
+export function estaNaHoraDeVisitar(c, hoje = new Date()) {
+  if (!c.proximaVisita) return true;
+  return new Date(c.proximaVisita + "T00:00:00") <= hoje;
+}
+
+// Quem está vencido há mais tempo sobe na fila: um Ouro 40 dias atrasado
+// precisa vir antes de um Ouro que venceu ontem. O teto evita que um cliente
+// esquecido há anos domine a rota inteira sozinho.
+function bonusAtraso(c) {
+  const atraso = diasDeAtraso(c);
+  if (!atraso) return 0;
+  return Math.min(atraso, 90) * 0.6;
+}
+
+// Texto curto do estado da agenda, para a lista do plano explicar por que o
+// cliente está ali (ou por que sumiu).
+export function textoAgenda(c) {
+  if (!c.ultimaVisita) return "nunca visitado";
+  const quando = new Date(c.ultimaVisita + "T00:00:00").toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "2-digit",
+  });
+  const atraso = diasDeAtraso(c);
+  if (atraso > 0) return `visitado em ${quando} · voltar há ${atraso}d`;
+  if (c.proximaVisita) {
+    const alvo = new Date(c.proximaVisita + "T00:00:00").toLocaleDateString("pt-BR", {
+      day: "2-digit", month: "2-digit",
+    });
+    return `visitado em ${quando} · voltar em ${alvo}`;
+  }
+  return `visitado em ${quando}`;
 }
 
 export function motivoVisita(c) {
@@ -62,8 +110,13 @@ export function kmTotalReta(ordem) {
 
 // Monta o plano da semana: 5 dias, cada um uma rota geograficamente tight,
 // ancorada num cliente de alto valor e completada por proximidade + valor.
-export function montarPlanoSemana(clientes, capacidade, dias = 5) {
-  const pool = clientes.filter((c) => c.lat != null);
+export function montarPlanoSemana(clientes, capacidade, dias = 5, incluirNaoVencidos = false) {
+  // Fora do plano quem foi visitado há pouco e ainda não venceu. Sem isto, o
+  // mesmo cliente reaparecia toda semana, porque o cálculo só olhava faixa e
+  // risco — nunca a visita que acabou de acontecer.
+  const pool = clientes.filter(
+    (c) => c.lat != null && (incluirNaoVencidos || estaNaHoraDeVisitar(c))
+  );
   const restante = [...pool];
   const PENALIDADE_KM = 3; // quanto a distância "custa" frente ao valor
   const RAIO_DIA_KM = 45; // cada dia é uma rota local — sem cruzar o estado

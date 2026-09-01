@@ -84,6 +84,10 @@ class ClienteOut(BaseModel):
     contatoCelular: str | None = None
     clienteMestreId: int | None = None
     temPromessaPendente: bool = False
+    # Agenda de visita — alimenta o Plano da Semana, que antes repetia quem
+    # tinha acabado de ser visitado. Nulo = nunca visitado.
+    ultimaVisita: date | None = None
+    proximaVisita: date | None = None
 
 
 class HistoricoItemOut(BaseModel):
@@ -255,3 +259,17 @@ class RelatorioResumo(BaseModel):
 class RelatorioVisitasOut(BaseModel):
     resumo: RelatorioResumo
     visitas: list[VisitaRelatorioItem]
+
+
+class ClientesPagina(BaseModel):
+    """Página da listagem de gestão. A contagem total vem junto para a tela
+    saber quantas páginas existem sem precisar baixar a carteira inteira."""
+    total: int
+    pagina: int
+    tamanho: int
+    itens: list[ClienteOut]
+
+
+class AlterarStatusLote(BaseModel):
+    clienteIds: list[int]
+    status: StatusCliente

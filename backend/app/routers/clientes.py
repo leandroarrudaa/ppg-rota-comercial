@@ -5,9 +5,11 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Cliente, HistoricoItemCliente, PapelUsuario, Usuario
 from ..schemas import (
+    AlterarStatusLote,
     ClienteAtualizar,
     ClienteCriarManual,
     ClienteOut,
+    ClientesPagina,
     FichaClienteOut,
     HistoricoItemOut,
     HistoricoItensPagina,
@@ -57,8 +59,68 @@ def listar(
         bbox=bbox_tupla,
         apenas_elegiveis_visita=elegivelVisita,
     )
+    ids = [c.id for c in registros]
+    pendentes = visitas_svc.ids_com_promessa_pendente(db, ids)
+    # uma consulta agregada só para a carteira inteira — ver agenda_de_visitas
+    agenda = visitas_svc.agenda_de_visitas(db, ids)
+    return [
+        svc.para_saida(c, tem_promessa=c.id in pendentes, agenda=agenda.get(c.id))
+        for c in registros
+    ]
+
+
+@router.get("/admin", response_model=ClientesPagina)
+def listar_admin(
+    busca: str | None = None,
+    faixa: str | None = None,
+    cidade: str | None = None,
+    origem: str | None = None,
+    status: str | None = Query(default="ativo", description="ativo | inativo | todos"),
+    aceitaVisita: bool | None = None,
+    semLocalizacao: bool = False,
+    vinculo: str | None = Query(default=None, description="com | sem"),
+    ordenar: str = "faturamento",
+    pagina: int = Query(default=1, ge=1),
+    tamanho: int = Query(default=50, ge=1, le=200),
+    _admin: Usuario = Depends(auth.requer_admin),
+    db: Session = Depends(get_db),
+):
+    """Listagem de gestão da carteira — mostra inativo e quem não tem
+    coordenada, ao contrário da listagem que alimenta o mapa e a rota."""
+    registros, total = svc.listar_admin(
+        db, busca=busca, faixa=faixa, cidade=cidade, origem=origem, status=status,
+        aceita_visita=aceitaVisita, sem_localizacao=semLocalizacao, vinculo=vinculo,
+        ordenar=ordenar, pagina=pagina, tamanho=tamanho,
+    )
     pendentes = visitas_svc.ids_com_promessa_pendente(db, [c.id for c in registros])
-    return [svc.para_saida(c, tem_promessa=c.id in pendentes) for c in registros]
+    return ClientesPagina(
+        total=total, pagina=pagina, tamanho=tamanho,
+        itens=[svc.para_saida(c, tem_promessa=c.id in pendentes) for c in registros],
+    )
+
+
+@router.patch("/lote/status")
+def alterar_status_lote(
+    dados: AlterarStatusLote,
+    _admin: Usuario = Depends(auth.requer_admin),
+    db: Session = Depends(get_db),
+):
+    """Inativa/reativa vários clientes numa chamada só."""
+    alterados = svc.alterar_status_em_lote(db, dados.clienteIds, dados.status)
+    db.commit()
+    return {"alterados": alterados}
+
+
+@router.get("/cidades", response_model=list[str])
+def cidades(
+    _admin: Usuario = Depends(auth.requer_admin),
+    db: Session = Depends(get_db),
+):
+    """Cidades distintas — alimenta o filtro da tela de gestão."""
+    return [
+        c for (c,) in db.query(Cliente.cidade).filter(Cliente.cidade.isnot(None))
+        .distinct().order_by(Cliente.cidade)
+    ]
 
 
 @router.post("/manual", response_model=ClienteOut)
@@ -83,7 +145,8 @@ def obter(
     if cliente is None:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     tem_promessa = cliente_id in visitas_svc.ids_com_promessa_pendente(db, [cliente_id])
-    return svc.para_saida(cliente, tem_promessa=tem_promessa)
+    agenda = visitas_svc.agenda_de_visitas(db, [cliente_id]).get(cliente_id)
+    return svc.para_saida(cliente, tem_promessa=tem_promessa, agenda=agenda)
 
 
 @router.patch("/{cliente_id}", response_model=ClienteOut)
@@ -100,7 +163,8 @@ def atualizar(
     db.commit()
     db.refresh(cliente)
     tem_promessa = cliente_id in visitas_svc.ids_com_promessa_pendente(db, [cliente_id])
-    return svc.para_saida(cliente, tem_promessa=tem_promessa)
+    agenda = visitas_svc.agenda_de_visitas(db, [cliente_id]).get(cliente_id)
+    return svc.para_saida(cliente, tem_promessa=tem_promessa, agenda=agenda)
 
 
 @router.get("/{cliente_id}/historico-itens", response_model=HistoricoItensPagina)

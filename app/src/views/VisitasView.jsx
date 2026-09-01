@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
-import { montarPlanoSemana, rotaEstrada, motivoVisita, DIAS } from "../lib/rota";
+import { montarPlanoSemana, rotaEstrada, motivoVisita, textoAgenda, estaNaHoraDeVisitar, DIAS } from "../lib/rota";
 import { recomendar } from "../lib/recomendacao";
 import { gerarPdfDia } from "../lib/pdf";
 import { usarRotaExterna } from "../lib/rotaSalva";
@@ -34,6 +34,9 @@ function FitRota({ pontos }) {
 export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   const [capacidade, setCapacidade] = useState(12);
   const [dia, setDia] = useState(0);
+  // Por padrão o plano só traz quem está na hora de visitar. A chave existe
+  // para completar um dia fraco — não para voltar ao comportamento antigo.
+  const [incluirNaoVencidos, setIncluirNaoVencidos] = useState(false);
   const [estrada, setEstrada] = useState(null);
   const [carregandoRota, setCarregandoRota] = useState(false);
   const [aberto, setAberto] = useState(null);
@@ -58,7 +61,15 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
     aoAbrirRotaDoDia();
   }
 
-  const planos = useMemo(() => montarPlanoSemana(clientes, capacidade), [clientes, capacidade]);
+  const planos = useMemo(
+    () => montarPlanoSemana(clientes, capacidade, 5, incluirNaoVencidos),
+    [clientes, capacidade, incluirNaoVencidos]
+  );
+  // quantos ficaram de fora só por terem sido visitados há pouco
+  const aguardando = useMemo(
+    () => clientes.filter((c) => c.lat != null && !estaNaHoraDeVisitar(c)).length,
+    [clientes]
+  );
   const plano = planos[dia] || planos[0];
 
   useEffect(() => {
@@ -73,7 +84,26 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
     return () => { vivo = false; };
   }, [plano]);
 
-  if (!plano) return <div className="vazio">Nenhum cliente ativo para visitar neste período.</div>;
+  if (!plano) {
+    return (
+      <div className="vazio">
+        {aguardando > 0 ? (
+          <>
+            <p>Nenhum cliente vencido para visitar.</p>
+            <p className="muted" style={{ fontSize: 13 }}>
+              {aguardando} {aguardando === 1 ? "cliente foi visitado" : "clientes foram visitados"} há
+              pouco e ainda não chegou a hora de voltar.
+            </p>
+            <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={() => setIncluirNaoVencidos(true)}>
+              Incluir quem ainda não venceu
+            </button>
+          </>
+        ) : (
+          "Nenhum cliente ativo para visitar neste período."
+        )}
+      </div>
+    );
+  }
 
   const km = estrada ? estrada.km : plano.kmReta * 1.35;
   const min = estrada ? estrada.min : (plano.kmReta * 1.35) / 0.6;
@@ -99,6 +129,24 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
           <span className="filtro-titulo">Visitas por dia: <b style={{ color: "var(--ink)" }}>{capacidade}</b></span>
           <input type="range" min="5" max="25" value={capacidade} onChange={(e) => setCapacidade(+e.target.value)} className="slider" />
         </div>
+
+        {aguardando > 0 && (
+          <label className="agenda-chave">
+            <input
+              type="checkbox"
+              checked={incluirNaoVencidos}
+              onChange={(e) => setIncluirNaoVencidos(e.target.checked)}
+            />
+            <span>
+              Incluir quem ainda não venceu
+              <small className="faint">
+                {" · "}{aguardando === 1
+                  ? "1 visitado há pouco está de fora"
+                  : `${aguardando} visitados há pouco estão de fora`}
+              </small>
+            </span>
+          </label>
+        )}
 
         <div className="resumo">
           <div className="resumo-item"><span>Visitas</span><b>{plano.clientes.length}</b></div>
@@ -141,6 +189,7 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
                       {c.emRisco && <span className="chip chip-risk"><span className="dot dot-risk" />risco</span>}
                     </div>
                     <div className="faint" style={{ fontSize: 12 }}>{c.bairro || c.cidade} · {brl(c.fat)}</div>
+                    <div className="faint" style={{ fontSize: 11 }}>{textoAgenda(c)}</div>
                     {open && (
                       <div className="rota-rec">
                         <b style={{ color: rec.cor }}>{rec.tag}</b>

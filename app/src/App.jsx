@@ -13,11 +13,11 @@ const MapaView = lazy(() => import("./views/MapaView"));
 const PlanoView = lazy(() => import("./views/PlanoView"));
 const RotaDiaView = lazy(() => import("./views/RotaDiaView"));
 const RelatoriosView = lazy(() => import("./views/RelatoriosView"));
-const SugestoesVinculoView = lazy(() => import("./views/SugestoesVinculoView"));
+const GestaoView = lazy(() => import("./views/GestaoView"));
 const UsuariosView = lazy(() => import("./views/UsuariosView"));
 const RelatorioVisita = lazy(() => import("./views/RelatorioVisita"));
 
-const ABAS_BASE = ["Mapa", "Plano da Semana", "Rota do Dia", "Relatórios", "Carteira"];
+const ABAS_BASE = ["Mapa", "Plano da Semana", "Rota do Dia", "Relatórios"];
 
 export default function App() {
   const [aba, setAba] = useState("Mapa");
@@ -108,7 +108,7 @@ export default function App() {
 
   if (!usuario) return <LoginView aoEntrar={setUsuario} />;
 
-  const abas = usuario.papel === "admin" ? [...ABAS_BASE, "Vínculos", "Usuários"] : ABAS_BASE;
+  const abas = usuario.papel === "admin" ? [...ABAS_BASE, "Gestão", "Usuários"] : ABAS_BASE;
 
   return (
     <div className="app">
@@ -220,8 +220,8 @@ export default function App() {
           />
         ) : aba === "Relatórios" ? (
           <RelatoriosView usuario={usuario} />
-        ) : aba === "Vínculos" ? (
-          <SugestoesVinculoView />
+        ) : aba === "Gestão" ? (
+          <GestaoView />
         ) : aba === "Usuários" ? (
           <UsuariosView usuarioAtual={usuario} />
         ) : (

@@ -1,9 +1,10 @@
 """Regras do fluxo de visita: abrir, finalizar, relatório bloqueante e promessas."""
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import Cliente, Promessa, StatusVisita, Usuario, Visita
@@ -215,3 +216,68 @@ def cumprir_promessa(db: Session, promessa_id: int) -> PromessaOut:
     db.refresh(p)
     return PromessaOut(id=p.id, clienteId=p.cliente_id, texto=p.texto, cumprida=p.cumprida,
                         cumpridaEm=p.cumprida_em, criadoEm=p.criado_em)
+
+
+# Quando voltar, para quem nunca combinou uma data no relatório. É a cadência
+# de RELACIONAMENTO (de quanto em quanto tempo vale a pena aparecer), não a de
+# compra — cliente Ouro merece presença mais frequente mesmo comprando pouco.
+DIAS_ENTRE_VISITAS_POR_FAIXA = {"Ouro": 30, "Prata": 45, "Bronze": 60}
+DIAS_ENTRE_VISITAS_PADRAO = 60
+
+
+def agenda_de_visitas(db: Session, cliente_ids: list[int] | None = None) -> dict[int, dict]:
+    """Última visita e data de retorno combinada, por cliente.
+
+    É a informação que faltava para o Plano da Semana parar de repetir quem
+    acabou de ser visitado: o vendedor JÁ escolhe "voltar em quantos dias" ao
+    fechar cada relatório, e esse dado nunca era lido de volta.
+
+    Vale para a empresa toda, não por vendedor: cliente visitado é cliente
+    visitado, independente de quem foi — decisão explícita, para dois
+    vendedores não baterem na mesma porta.
+
+    Uma consulta agregada só, não uma por cliente: o banco fica longe do
+    servidor e N idas e voltas custariam segundos na abertura da tela.
+    """
+    q = (
+        db.query(
+            Visita.cliente_id,
+            func.max(Visita.inicio).label("ultima"),
+            func.max(Visita.retorno_data).label("retorno"),
+        )
+        .filter(Visita.status == StatusVisita.FINALIZADA)
+        .group_by(Visita.cliente_id)
+    )
+    if cliente_ids is not None:
+        if not cliente_ids:
+            return {}
+        q = q.filter(Visita.cliente_id.in_(cliente_ids))
+
+    return {
+        cliente_id: {"ultima_visita": ultima, "retorno_data": retorno}
+        for cliente_id, ultima, retorno in q.all()
+    }
+
+
+def proxima_visita(agenda: dict | None, faixa: str | None) -> tuple[date | None, date | None]:
+    """(data da última visita, data em que vale voltar).
+
+    Sem visita nenhuma, os dois são None — e "nunca visitado" é tratado como
+    disponível agora, com prioridade, não como atrasado por tempo infinito.
+
+    A data combinada pelo vendedor no relatório manda. Ela é uma decisão
+    tomada na frente do cliente e vale mais que qualquer média estatística;
+    só quando ela não existe é que se cai na cadência da faixa.
+    """
+    if not agenda or not agenda.get("ultima_visita"):
+        return None, None
+
+    ultima = agenda["ultima_visita"]
+    ultima_data = ultima.date() if isinstance(ultima, datetime) else ultima
+
+    combinada = agenda.get("retorno_data")
+    if combinada:
+        return ultima_data, combinada
+
+    intervalo = DIAS_ENTRE_VISITAS_POR_FAIXA.get(faixa, DIAS_ENTRE_VISITAS_PADRAO)
+    return ultima_data, ultima_data + timedelta(days=intervalo)

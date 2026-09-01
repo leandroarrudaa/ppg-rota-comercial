@@ -84,5 +84,6 @@ export const api = {
   get: (caminho) => chamar(caminho),
   post: (caminho, corpo) => chamar(caminho, { method: "POST", body: JSON.stringify(corpo) }),
   patch: (caminho, corpo) => chamar(caminho, { method: "PATCH", body: JSON.stringify(corpo) }),
+  put: (caminho, corpo) => chamar(caminho, { method: "PUT", body: JSON.stringify(corpo) }),
   del: (caminho) => chamar(caminho, { method: "DELETE" }),
 };
