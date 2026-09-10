@@ -277,15 +277,42 @@ select.input { cursor: pointer; }
 .corte b { white-space: nowrap; }
 
 .plano-filtros {
-  flex: 0 0 auto; display: flex; align-items: flex-end; gap: 16px;
-  padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--surface);
-  flex-wrap: wrap;
+  flex: 0 0 auto; padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--surface);
 }
-.plano-filtros .filtro-grupo { min-width: 200px; }
-.plano-filtros .btn { align-self: flex-end; }
-.plano-filtros .rfm-grupo { min-width: 280px; }
+.plano-filtros-linha { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.plano-filtros .filtro-grupo { min-width: 180px; }
+.plano-filtros-limpar { min-width: 0; }
+.plano-filtros .btn { align-self: flex-end; white-space: nowrap; }
 
-/* ---------- filtro de matriz RFM (Plano da Semana) ---------- */
+/* faixa RFM como chips numa linha — em vez dos medalhões empilhados da Rota
+   do Dia, que aqui desalinhavam a barra inteira (todo filtro do lado tinha
+   uma linha só, o de faixa tinha três, e a fileira ficava com alturas bem
+   diferentes). */
+.faixa-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.faixa-chip {
+  display: flex; align-items: center; gap: 6px; padding: 0.5rem 0.7rem;
+  border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface);
+  font-size: 0.82rem; font-weight: 600; color: var(--ink); cursor: pointer;
+  transition: opacity .15s, filter .15s;
+}
+.faixa-chip .coin { width: 15px; height: 15px; }
+.faixa-chip b { font-weight: 700; }
+.faixa-chip.off { opacity: .45; filter: grayscale(.5); }
+.faixa-chip:hover { background: var(--surface-2); }
+
+/* botão "▾ Matriz RFM" com um pontinho quando o filtro avançado está ativo */
+.btn-com-filtro { position: relative; }
+.ponto-ativo {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--navy);
+  display: inline-block; margin-left: 2px;
+}
+
+/* painel colapsável da matriz RFM — some por padrão, some abaixo da linha
+   principal quando aberto, num bloco próprio com separador. */
+.plano-filtros-rfm {
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line);
+  display: flex; flex-direction: column; gap: 10px; max-width: 520px;
+}
 .rfm-linhas { display: flex; flex-direction: column; gap: 6px; }
 .rfm-linha { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--ink-soft); }
 .rfm-label { width: 104px; flex: 0 0 auto; }
@@ -456,6 +483,7 @@ select.input { cursor: pointer; }
 .painel .input:focus { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255, 207, 0, 0.2); }
 .painel select.input option { color: #111; }
 .painel .search-ico { color: rgba(255, 255, 255, 0.5); }
+.painel .rfm-linha { color: rgba(255, 255, 255, 0.75); }
 
 /* medalhões em vidro escuro (moedas metálicas se mantêm) */
 .painel .medal {

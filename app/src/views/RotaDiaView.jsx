@@ -9,6 +9,8 @@ import MapAutoSize from "../components/MapAutoSize";
 import FichaCliente from "./FichaCliente";
 
 const FXKEY = { Ouro: "gold", Prata: "silver", Bronze: "bronze" };
+const NOTAS_RFM = [1, 2, 3, 4, 5];
+const RFM_PADRAO = { rMin: 1, rMax: 5, fMin: 1, fMax: 5, mMin: 1, mMax: 5 };
 
 // Cache FORA do componente (module scope): sobrevive a trocar de aba e
 // voltar — o React desmonta a RotaDiaView inteira ao trocar de aba,
@@ -104,6 +106,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
   const [faixasOn, setFaixasOn] = useState({ Ouro: true, Prata: true, Bronze: true });
   const [soRisco, setSoRisco] = useState(false);
   const [faturamentoMin, setFaturamentoMin] = useState(0);
+  const [rfm, setRfm] = useState(RFM_PADRAO);
   // Só importa no mobile (CSS): faturamento/faixa/risco recolhidos por
   // padrão pra sobrar mais espaço de tela pra lista de clientes, que é o
   // que se usa o tempo todo — no desktop esses filtros continuam sempre
@@ -231,17 +234,24 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
   const buscaAtiva = buscaTexto.trim().length >= 2;
   const poolAtivo = buscaAtiva ? (candidatosBusca || []) : candidatosBbox;
 
+  const rfmPadrao = Object.keys(RFM_PADRAO).every((k) => rfm[k] === RFM_PADRAO[k]);
+
   function passaFiltro(c) {
     if (c.origem === "antigo" && !faixasOn[c.faixa]) return false;
     if (c.origem === "antigo" && faturamentoMin > 0 && (c.fat || 0) < faturamentoMin) return false;
+    if (c.origem === "antigo" && !rfmPadrao) {
+      if (c.R == null || c.R < rfm.rMin || c.R > rfm.rMax) return false;
+      if (c.F == null || c.F < rfm.fMin || c.F > rfm.fMax) return false;
+      if (c.M == null || c.M < rfm.mMin || c.M > rfm.mMax) return false;
+    }
     if (soRisco && !c.emRisco) return false;
     return true;
   }
 
-  const poolFiltrado = useMemo(() => poolAtivo.filter(passaFiltro), [poolAtivo, faixasOn, soRisco, faturamentoMin]);
+  const poolFiltrado = useMemo(() => poolAtivo.filter(passaFiltro), [poolAtivo, faixasOn, soRisco, faturamentoMin, rfm, rfmPadrao]);
   // os pinos do mapa também precisam respeitar o filtro — senão o mapa mostra
   // cor/faixa que a lista já escondeu, ficando incoerente com os contadores
-  const bboxFiltrado = useMemo(() => candidatosBbox.filter(passaFiltro), [candidatosBbox, faixasOn, soRisco, faturamentoMin]);
+  const bboxFiltrado = useMemo(() => candidatosBbox.filter(passaFiltro), [candidatosBbox, faixasOn, soRisco, faturamentoMin, rfm, rfmPadrao]);
 
   const antigos = useMemo(
     () => poolFiltrado.filter((c) => c.origem === "antigo").sort((a, b) => valorEstrategico(b) - valorEstrategico(a)),
@@ -432,7 +442,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
           className="btn-toggle-filtros"
           onClick={() => setFiltrosAbertos((v) => !v)}
         >
-          {filtrosAbertos ? "▲ Menos filtros" : "▾ Mais filtros (faturamento, faixa, risco)"}
+          {filtrosAbertos ? "▲ Menos filtros" : "▾ Mais filtros (faturamento, faixa, RFM, risco)"}
         </button>
 
         <div className={"rota-dia-filtros-extra" + (filtrosAbertos ? " aberto" : "")}>
@@ -477,6 +487,61 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
                 );
               })}
             </div>
+          </div>
+
+          <div className="filtro-grupo">
+            <span className="filtro-titulo">
+              Matriz RFM{" "}
+              <span className="faint" style={{ textTransform: "none", fontWeight: 500 }}>
+                · R recência, F frequência, M valor (1 a 5)
+              </span>
+            </span>
+            <div className="rfm-linhas">
+              <div className="rfm-linha">
+                <span className="rfm-label">Recência (R)</span>
+                <select className="input rfm-select" value={rfm.rMin} onChange={(e) => setRfm((s) => ({ ...s, rMin: +e.target.value }))}>
+                  {NOTAS_RFM.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <span className="faint">até</span>
+                <select className="input rfm-select" value={rfm.rMax} onChange={(e) => setRfm((s) => ({ ...s, rMax: +e.target.value }))}>
+                  {NOTAS_RFM.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div className="rfm-linha">
+                <span className="rfm-label">Frequência (F)</span>
+                <select className="input rfm-select" value={rfm.fMin} onChange={(e) => setRfm((s) => ({ ...s, fMin: +e.target.value }))}>
+                  {NOTAS_RFM.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <span className="faint">até</span>
+                <select className="input rfm-select" value={rfm.fMax} onChange={(e) => setRfm((s) => ({ ...s, fMax: +e.target.value }))}>
+                  {NOTAS_RFM.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div className="rfm-linha">
+                <span className="rfm-label">Valor (M)</span>
+                <select className="input rfm-select" value={rfm.mMin} onChange={(e) => setRfm((s) => ({ ...s, mMin: +e.target.value }))}>
+                  {NOTAS_RFM.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <span className="faint">até</span>
+                <select className="input rfm-select" value={rfm.mMax} onChange={(e) => setRfm((s) => ({ ...s, mMax: +e.target.value }))}>
+                  {NOTAS_RFM.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ fontSize: 12, padding: "0.4rem 0.7rem" }}
+              onClick={() => setRfm({ rMin: 1, rMax: 2, fMin: 1, fMax: 2, mMin: 4, mMax: 5 })}
+              title="R até 2 (sumiu) · F até 2 (compra raro) · M de 4 a 5 (quando compra, compra bem)"
+            >
+              Potencial esquecido: comprou bem, sumiu, é raro
+            </button>
+            {!rfmPadrao && (
+              <button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: "0.4rem 0.7rem" }} onClick={() => setRfm(RFM_PADRAO)}>
+                Limpar matriz RFM
+              </button>
+            )}
           </div>
 
           <button
