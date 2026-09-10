@@ -40,7 +40,10 @@ export default function CarteiraAdminView() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
   const [cidades, setCidades] = useState([]);
-  const [selecionados, setSelecionados] = useState(new Set());
+  // Map (id -> cliente), não Set de ids: guarda o cliente inteiro pra poder
+  // mostrar nome/CNPJ de quem foi selecionado numa busca anterior, mesmo que
+  // a busca atual não o traga mais na tela (ver "carteira-selecao" abaixo).
+  const [selecionados, setSelecionados] = useState(new Map());
   const [ocupado, setOcupado] = useState("");
   const [aviso, setAviso] = useState("");
 
@@ -78,10 +81,14 @@ export default function CarteiraAdminView() {
     return () => clearTimeout(t);
   }, [carregar]);
 
+  // Busca/filtro/ordenação NÃO apagam a seleção — o gerente pode pesquisar
+  // uma razão social, marcar, pesquisar outra e marcar de novo, acumulando
+  // candidatos a vínculo (ou a inativar) de buscas diferentes até mandar de
+  // uma vez. "Limpar seleção" (na barra de ações) existe pra quando ele quer
+  // recomeçar do zero.
   function mudarFiltro(campo, valor) {
     setFiltros((f) => ({ ...f, [campo]: valor }));
     setPagina(1);
-    setSelecionados(new Set());
   }
 
   // A ordenação vai para o servidor, não é feita no navegador: a lista é
@@ -95,21 +102,28 @@ export default function CarteiraAdminView() {
         : (coluna.ascPadrao ? "asc" : "desc"),
     }));
     setPagina(1);
-    setSelecionados(new Set());
   }
 
-  function alternar(id) {
+  function alternar(cliente) {
     setSelecionados((s) => {
-      const novo = new Set(s);
-      if (novo.has(id)) novo.delete(id);
-      else novo.add(id);
+      const novo = new Map(s);
+      if (novo.has(cliente.id)) novo.delete(cliente.id);
+      else novo.set(cliente.id, cliente);
       return novo;
     });
   }
 
   function alternarTodos() {
-    const ids = (dados?.itens || []).map((c) => c.id);
-    setSelecionados((s) => (ids.every((id) => s.has(id)) ? new Set() : new Set(ids)));
+    const pagina = dados?.itens || [];
+    setSelecionados((s) => {
+      const novo = new Map(s);
+      if (pagina.every((c) => novo.has(c.id))) {
+        pagina.forEach((c) => novo.delete(c.id));
+      } else {
+        pagina.forEach((c) => novo.set(c.id, c));
+      }
+      return novo;
+    });
   }
 
   async function alterarStatus(status) {
@@ -117,14 +131,14 @@ export default function CarteiraAdminView() {
     setAviso("");
     try {
       const r = await api.patch("/api/clientes/lote/status", {
-        clienteIds: [...selecionados],
+        clienteIds: [...selecionados.keys()],
         status,
       });
       setAviso(
         `${r.alterados} ${r.alterados === 1 ? "cliente" : "clientes"} ` +
         `${status === "inativo" ? "inativado(s)" : "reativado(s)"}.`
       );
-      setSelecionados(new Set());
+      setSelecionados(new Map());
       carregar();
     } catch (e) {
       setErro(e.message);
@@ -138,9 +152,9 @@ export default function CarteiraAdminView() {
     setOcupado("vincular");
     setAviso("");
     try {
-      const r = await api.post("/api/vinculos", { clienteIds: [...selecionados] });
+      const r = await api.post("/api/vinculos", { clienteIds: [...selecionados.keys()] });
       setAviso(`Vinculados como "${r.nomePreferido}" — ${r.membros.length} CNPJs no mesmo cliente.`);
-      setSelecionados(new Set());
+      setSelecionados(new Map());
       carregar();
     } catch (e) {
       setErro(e.message);
@@ -237,9 +251,33 @@ export default function CarteiraAdminView() {
                 {ocupado === "inativo" ? "Inativando…" : "Inativar"}
               </button>
             )}
+            <button className="btn btn-ghost" disabled={Boolean(ocupado)} onClick={() => setSelecionados(new Map())}>
+              Limpar seleção
+            </button>
           </div>
         )}
       </div>
+
+      {/* A seleção sobrevive a trocar de busca/filtro (ver mudarFiltro) —
+          essa lista mostra quem está marcado mesmo que a busca atual não
+          esteja mais mostrando ele na tabela, pra não vincular/inativar às
+          cegas quem ficou de fora da tela. */}
+      {selecionados.size > 0 && (
+        <div className="carteira-selecao">
+          {[...selecionados.values()].map((c) => (
+            <span key={c.id} className="chip chip-selecionado">
+              {c.nome}
+              <button
+                type="button"
+                aria-label={`Remover ${c.nome} da seleção`}
+                onClick={() => alternar(c)}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="carteira-tabela-wrap">
         <table className="carteira-tabela">
@@ -270,7 +308,7 @@ export default function CarteiraAdminView() {
             ) : itens.map((c) => (
               <tr key={c.id} className={selecionados.has(c.id) ? "marcada" : ""}>
                 <td>
-                  <input type="checkbox" checked={selecionados.has(c.id)} onChange={() => alternar(c.id)} />
+                  <input type="checkbox" checked={selecionados.has(c.id)} onChange={() => alternar(c)} />
                 </td>
                 <td>
                   <div className="carteira-nome">{c.nome}</div>

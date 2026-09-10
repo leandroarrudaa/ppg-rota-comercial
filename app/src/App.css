@@ -276,6 +276,14 @@ select.input { cursor: pointer; }
 .corte-slider { width: 140px; }
 .corte b { white-space: nowrap; }
 
+.plano-filtros {
+  flex: 0 0 auto; display: flex; align-items: flex-end; gap: 16px;
+  padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--surface);
+  flex-wrap: wrap;
+}
+.plano-filtros .filtro-grupo { min-width: 200px; }
+.plano-filtros .btn { align-self: flex-end; }
+
 .plano-corpo { flex: 1 1 auto; min-height: 0; }
 
 /* ---------- Lista de Contato (cards premium) ---------- */
@@ -720,6 +728,18 @@ th.ordenavel:hover { color: var(--ink-soft); }
 }
 .carteira-acoes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .carteira-acoes .btn { font-size: 13px; padding: 0.45rem 0.9rem; }
+
+/* lista de quem está selecionado, mesmo fora da página/busca atual */
+.carteira-selecao { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chip-selecionado {
+  background: #eef3ff; color: var(--navy);
+  padding-right: 0.35rem;
+}
+.chip-selecionado button {
+  background: none; border: none; cursor: pointer; padding: 0 0 0 2px;
+  color: inherit; font-size: 0.95rem; line-height: 1; opacity: 0.6;
+}
+.chip-selecionado button:hover { opacity: 1; }
 
 /* Tabela larga: rola dentro da própria caixa, nunca empurra a página. */
 .carteira-tabela-wrap {
