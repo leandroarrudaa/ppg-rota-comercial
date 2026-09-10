@@ -46,10 +46,47 @@ export default function CarteiraAdminView() {
   const [selecionados, setSelecionados] = useState(new Map());
   const [ocupado, setOcupado] = useState("");
   const [aviso, setAviso] = useState("");
+  // null = ainda não sabe; número = quantos clientes têm CNPJ mas nunca
+  // tiveram o ramo de atividade (CNAE) buscado na Receita.
+  const [cnaePendentes, setCnaePendentes] = useState(null);
+  const [buscandoCnae, setBuscandoCnae] = useState(false);
+  const [progressoCnae, setProgressoCnae] = useState(null);
 
   useEffect(() => {
     api.get("/api/clientes/cidades").then(setCidades).catch(() => setCidades([]));
+    api.get("/api/clientes/cnae-pendentes").then((r) => setCnaePendentes(r.pendentes)).catch(() => {});
   }, []);
+
+  // Busca o CNAE (ramo de atividade) de quem ainda não tem, um lote por vez —
+  // o servidor processa o que cabe num orçamento de tempo (ver
+  // enriquecimento.py) e diz quanto falta; a tela chama de novo até zerar.
+  // Alimenta o filtro "Ramo de atividade" do Plano da Semana, que só existe
+  // pra quem tem essa informação.
+  async function buscarCnaePendentes() {
+    setBuscandoCnae(true);
+    setErro("");
+    let encontrados = 0, naoEncontrados = 0, semCnpjValido = 0;
+    try {
+      for (;;) {
+        const r = await api.post("/api/clientes/enriquecer-cnae", {});
+        encontrados += r.encontrados;
+        naoEncontrados += r.naoEncontrados;
+        semCnpjValido += r.semCnpjValido;
+        setCnaePendentes(r.restam);
+        setProgressoCnae({ encontrados, naoEncontrados, semCnpjValido, restam: r.restam });
+        if (r.restam === 0 || r.processados === 0) break;
+      }
+      setAviso(
+        `Ramo de atividade: ${encontrados} encontrado(s)` +
+        (naoEncontrados > 0 ? `, ${naoEncontrados} não encontrado(s) na Receita` : "") +
+        `. Atualize a página pra ver as opções novas no filtro do Plano da Semana.`
+      );
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setBuscandoCnae(false);
+    }
+  }
 
   const carregar = useCallback(() => {
     setCarregando(true);
@@ -170,6 +207,19 @@ export default function CarteiraAdminView() {
 
   return (
     <div className="carteira-admin">
+      {(cnaePendentes > 0 || buscandoCnae) && (
+        <div className="carteira-aviso carteira-aviso-cnae">
+          <span>
+            {progressoCnae
+              ? `Buscando ramo de atividade… ${progressoCnae.restam} restante(s) — ${progressoCnae.encontrados} encontrado(s) até agora.`
+              : `${cnaePendentes} ${cnaePendentes === 1 ? "cliente tem" : "clientes têm"} CNPJ mas nunca tiveram o ramo de atividade buscado.`}
+          </span>
+          <button className="btn btn-ghost" disabled={buscandoCnae} onClick={buscarCnaePendentes}>
+            {buscandoCnae ? "Buscando…" : "Buscar CNAE via CNPJ"}
+          </button>
+        </div>
+      )}
+
       <div className="carteira-filtros">
         <input
           className="input"

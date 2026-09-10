@@ -283,6 +283,13 @@ select.input { cursor: pointer; }
 }
 .plano-filtros .filtro-grupo { min-width: 200px; }
 .plano-filtros .btn { align-self: flex-end; }
+.plano-filtros .rfm-grupo { min-width: 280px; }
+
+/* ---------- filtro de matriz RFM (Plano da Semana) ---------- */
+.rfm-linhas { display: flex; flex-direction: column; gap: 6px; }
+.rfm-linha { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--ink-soft); }
+.rfm-label { width: 104px; flex: 0 0 auto; }
+.rfm-select { width: 56px; flex: 0 0 auto; padding: 0.3rem 0.35rem; text-align: center; }
 
 .plano-corpo { flex: 1 1 auto; min-height: 0; }
 
@@ -722,6 +729,11 @@ th.ordenavel:hover { color: var(--ink-soft); }
   padding: 8px 12px; border-radius: 10px; margin-bottom: 10px;
   background: #e9f7ef; border: 1px solid #b7e0c6; font-size: 13px;
 }
+.carteira-aviso-cnae {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--navy-bg); border-color: #c3caf0;
+}
+.carteira-aviso-cnae .btn { font-size: 13px; padding: 0.4rem 0.85rem; flex: 0 0 auto; }
 .carteira-barra {
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 10px; margin-bottom: 10px;

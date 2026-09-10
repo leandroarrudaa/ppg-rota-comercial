@@ -1,12 +1,19 @@
 import { useMemo, useState } from "react";
 import VisitasView from "./VisitasView";
 import ContatoView from "./ContatoView";
+import { FAIXAS, num } from "../lib/format";
+
+const FXKEY = { Ouro: "gold", Prata: "silver", Bronze: "bronze" };
+const NOTAS_RFM = [1, 2, 3, 4, 5];
+const RFM_PADRAO = { rMin: 1, rMax: 5, fMin: 1, fMax: 5, mMin: 1, mMax: 5 };
 
 export default function PlanoView({ clientes, usuario, aoAbrirRotaDoDia }) {
   const [sub, setSub] = useState("Visitas");
   const [meses, setMeses] = useState(6); // "ativo" = comprou nos últimos N meses
   const [faturamentoMin, setFaturamentoMin] = useState(0);
   const [ramo, setRamo] = useState(""); // cnae (ramo de atividade), vazio = todos
+  const [faixasOn, setFaixasOn] = useState({ Ouro: true, Prata: true, Bronze: true });
+  const [rfm, setRfm] = useState(RFM_PADRAO);
 
   // Ramos distintos presentes na carteira carregada — só clientes antigos
   // enriquecidos por CNPJ têm essa informação (cadastro manual em campo não tem).
@@ -18,14 +25,25 @@ export default function PlanoView({ clientes, usuario, aoAbrirRotaDoDia }) {
     return [...vistos].sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [clientes]);
 
+  const faixaPadrao = FAIXAS.every((f) => faixasOn[f]);
+  const rfmPadrao = Object.keys(RFM_PADRAO).every((k) => rfm[k] === RFM_PADRAO[k]);
+  const temFiltro = faturamentoMin > 0 || ramo || !faixaPadrao || !rfmPadrao;
+
   const clientesFiltrados = useMemo(() => {
-    if (faturamentoMin <= 0 && !ramo) return clientes;
+    if (!temFiltro) return clientes;
     return clientes.filter((c) => {
       if (faturamentoMin > 0 && (c.fat || 0) < faturamentoMin) return false;
       if (ramo && c.cnae !== ramo) return false;
+      if (c.faixa && !faixasOn[c.faixa]) return false;
+      if (!rfmPadrao) {
+        if (c.R == null || c.R < rfm.rMin || c.R > rfm.rMax) return false;
+        if (c.F == null || c.F < rfm.fMin || c.F > rfm.fMax) return false;
+        if (c.M == null || c.M < rfm.mMin || c.M > rfm.mMax) return false;
+      }
       return true;
     });
-  }, [clientes, faturamentoMin, ramo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientes, faturamentoMin, ramo, faixasOn, rfm, temFiltro]);
 
   const { ativos, adormecidos } = useMemo(() => {
     const corte = meses * 30;
@@ -39,7 +57,19 @@ export default function PlanoView({ clientes, usuario, aoAbrirRotaDoDia }) {
     return { ativos, adormecidos };
   }, [clientesFiltrados, meses]);
 
-  const temFiltro = faturamentoMin > 0 || ramo;
+  function limparFiltros() {
+    setFaturamentoMin(0);
+    setRamo("");
+    setFaixasOn({ Ouro: true, Prata: true, Bronze: true });
+    setRfm(RFM_PADRAO);
+  }
+
+  // Atalho pro perfil que o gerente descreveu: comprou um valor legal (M
+  // alto), mas faz tempo que não volta (R baixo) e sempre comprou pouco (F
+  // baixo) — cliente com potencial que a carteira está deixando esfriar.
+  function aplicarPresetPotencial() {
+    setRfm({ rMin: 1, rMax: 2, fMin: 1, fMax: 2, mMin: 4, mMax: 5 });
+  }
 
   return (
     <div className="plano-wrap">
@@ -88,8 +118,85 @@ export default function PlanoView({ clientes, usuario, aoAbrirRotaDoDia }) {
           </div>
         )}
 
+        <div className="filtro-grupo">
+          <span className="filtro-titulo">Faixa RFM</span>
+          <div className="medais">
+            {FAIXAS.map((f) => {
+              const k = FXKEY[f];
+              const qtd = clientesFiltrados.filter((c) => c.faixa === f).length;
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  className={"medal medal-" + k + (faixasOn[f] ? "" : " off")}
+                  onClick={() => setFaixasOn((s) => ({ ...s, [f]: !s[f] }))}
+                  aria-pressed={faixasOn[f]}
+                >
+                  <span className={"coin coin-" + k} />
+                  <span className="medal-body">
+                    <span className="medal-top">
+                      <span className="medal-name">{f}</span>
+                      <span className="medal-count">{num(qtd)}</span>
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="filtro-grupo rfm-grupo">
+          <span className="filtro-titulo">
+            Matriz RFM{" "}
+            <span className="faint" style={{ textTransform: "none", fontWeight: 500 }}>
+              · R recência, F frequência, M valor (notas de 1 a 5)
+            </span>
+          </span>
+          <div className="rfm-linhas">
+            <div className="rfm-linha">
+              <span className="rfm-label">Recência (R)</span>
+              <select className="input rfm-select" value={rfm.rMin} onChange={(e) => setRfm((s) => ({ ...s, rMin: +e.target.value }))}>
+                {NOTAS_RFM.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span className="faint">até</span>
+              <select className="input rfm-select" value={rfm.rMax} onChange={(e) => setRfm((s) => ({ ...s, rMax: +e.target.value }))}>
+                {NOTAS_RFM.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div className="rfm-linha">
+              <span className="rfm-label">Frequência (F)</span>
+              <select className="input rfm-select" value={rfm.fMin} onChange={(e) => setRfm((s) => ({ ...s, fMin: +e.target.value }))}>
+                {NOTAS_RFM.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span className="faint">até</span>
+              <select className="input rfm-select" value={rfm.fMax} onChange={(e) => setRfm((s) => ({ ...s, fMax: +e.target.value }))}>
+                {NOTAS_RFM.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div className="rfm-linha">
+              <span className="rfm-label">Valor (M)</span>
+              <select className="input rfm-select" value={rfm.mMin} onChange={(e) => setRfm((s) => ({ ...s, mMin: +e.target.value }))}>
+                {NOTAS_RFM.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span className="faint">até</span>
+              <select className="input rfm-select" value={rfm.mMax} onChange={(e) => setRfm((s) => ({ ...s, mMax: +e.target.value }))}>
+                {NOTAS_RFM.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ fontSize: 12, padding: "0.4rem 0.7rem", alignSelf: "flex-start" }}
+            onClick={aplicarPresetPotencial}
+            title="R até 2 (sumiu) · F até 2 (compra raro) · M de 4 a 5 (quando compra, compra bem)"
+          >
+            Potencial esquecido: comprou bem, sumiu, é raro
+          </button>
+        </div>
+
         {temFiltro && (
-          <button className="btn btn-ghost" onClick={() => { setFaturamentoMin(0); setRamo(""); }}>
+          <button className="btn btn-ghost" style={{ alignSelf: "flex-end" }} onClick={limparFiltros}>
             Limpar filtros
           </button>
         )}

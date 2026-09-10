@@ -18,6 +18,7 @@ from ..schemas import (
 )
 from ..services import auth
 from ..services import clientes as svc
+from ..services import enriquecimento as enriquecimento_svc
 from ..services import vinculos as vinculos_svc
 from ..services import visitas as visitas_svc
 from ..services.cnpj import normalizar_cnpj
@@ -110,6 +111,29 @@ def alterar_status_lote(
     alterados = svc.alterar_status_em_lote(db, dados.clienteIds, dados.status)
     db.commit()
     return {"alterados": alterados}
+
+
+@router.get("/cnae-pendentes")
+def cnae_pendentes(
+    _admin: Usuario = Depends(auth.requer_admin),
+    db: Session = Depends(get_db),
+):
+    """Quantos clientes têm CNPJ mas nunca tiveram o ramo de atividade
+    buscado — alimenta o aviso na tela de Gestão."""
+    return {"pendentes": enriquecimento_svc.contar_pendentes(db)}
+
+
+@router.post("/enriquecer-cnae")
+def enriquecer_cnae(
+    _admin: Usuario = Depends(auth.requer_admin),
+    db: Session = Depends(get_db),
+):
+    """Busca o ramo de atividade (CNAE) via CNPJ de um lote de clientes
+    pendentes (BrasilAPI). Processa o que cabe num orçamento de tempo — a
+    tela chama de novo enquanto "restam" > 0."""
+    resultado = enriquecimento_svc.enriquecer_lote(db)
+    db.commit()
+    return resultado
 
 
 @router.get("/cidades", response_model=list[str])
