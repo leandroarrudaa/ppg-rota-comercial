@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Usuario
+from ..models import TipoVisita, Usuario
 from ..schemas import RelatorioVisitasOut
 from ..services import auth
 from ..services import relatorios as svc
@@ -18,6 +18,7 @@ def visitas(
     inicio: date = Query(..., description="Primeiro dia do período (calendário de Brasília)"),
     fim: date = Query(..., description="Último dia do período, inclusive"),
     vendedorId: int | None = Query(default=None, description="Admin só: filtra por vendedor. Omitido = todo mundo."),
+    tipo: TipoVisita | None = Query(default=None, description="Filtra presencial ou contato. Omitido = os dois."),
     usuario: Usuario = Depends(auth.usuario_atual),
     db: Session = Depends(get_db),
 ):
@@ -25,4 +26,4 @@ def visitas(
         raise HTTPException(status_code=400, detail="O fim do período não pode vir antes do início.")
     if (fim - inicio).days > 366:
         raise HTTPException(status_code=400, detail="Escolha um período de até 1 ano.")
-    return svc.relatorio_visitas(db, usuario=usuario, inicio=inicio, fim=fim, vendedor_id=vendedorId)
+    return svc.relatorio_visitas(db, usuario=usuario, inicio=inicio, fim=fim, vendedor_id=vendedorId, tipo=tipo)

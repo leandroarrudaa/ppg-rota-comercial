@@ -5,7 +5,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
-from .models import MotivoRecusaVisita, OrigemCliente, PapelUsuario, StatusCliente, StatusVisita
+from .models import MotivoRecusaVisita, OrigemCliente, PapelUsuario, StatusCliente, StatusVisita, TipoVisita
 
 
 # ----------------------------------------------------------- Auth
@@ -146,12 +146,14 @@ class PromessaOut(BaseModel):
 
 class VisitaAbrir(BaseModel):
     clienteId: int
+    tipo: TipoVisita = TipoVisita.PRESENCIAL
 
 
 class VisitaOut(BaseModel):
     id: int
     clienteId: int
     vendedorId: int
+    tipo: TipoVisita = TipoVisita.PRESENCIAL
     inicio: datetime
     fim: datetime | None = None
     status: StatusVisita
@@ -231,14 +233,16 @@ class FichaClienteOut(BaseModel):
 # ----------------------------------------------------------- Relatórios
 
 class VisitaRelatorioItem(BaseModel):
-    """Uma visita finalizada, com nome do cliente e do vendedor já embutidos —
-    a tela de Relatórios não precisa de uma requisição por cliente."""
+    """Uma visita (ou contato) finalizada, com nome do cliente e do vendedor
+    já embutidos — a tela de Relatórios não precisa de uma requisição por
+    cliente."""
     id: int
     clienteId: int
     clienteNome: str
     clienteCidade: str | None = None
     vendedorId: int
     vendedorNome: str
+    tipo: TipoVisita = TipoVisita.PRESENCIAL
     inicio: datetime
     fim: datetime | None = None
     duracaoMin: int | None = None
@@ -250,6 +254,10 @@ class VisitaRelatorioItem(BaseModel):
 
 class RelatorioResumo(BaseModel):
     totalVisitas: int
+    # Quebra por tipo — a base para as métricas separadas de campo x telefone
+    # que ainda não têm uma tela própria, mas já ficam contadas certas aqui.
+    totalPresenciais: int
+    totalContatos: int
     clientesUnicos: int
     duracaoMediaMin: int | None = None
     promessasFeitas: int

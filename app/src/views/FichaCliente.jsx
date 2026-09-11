@@ -33,7 +33,10 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
   const [erroStatus, setErroStatus] = useState("");
 
   const [promessas, setPromessas] = useState(null);
-  const [iniciandoVisita, setIniciandoVisita] = useState(false);
+  // guarda QUAL tipo está iniciando ("presencial" | "contato" | "") — os
+  // dois botões usam o mesmo estado pra nunca ficar os dois "carregando" ao
+  // mesmo tempo, e cada botão só mostra o próprio texto de carregamento.
+  const [iniciandoVisita, setIniciandoVisita] = useState("");
   const [finalizandoVisita, setFinalizandoVisita] = useState(false);
   const [erroVisita, setErroVisita] = useState("");
 
@@ -157,21 +160,22 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
     }
   }
 
-  async function iniciarVisita() {
-    setIniciandoVisita(true);
+  async function iniciar(tipo) {
+    setIniciandoVisita(tipo);
     setErroVisita("");
     try {
-      await aoIniciarVisita(cliente.id);
+      await aoIniciarVisita(cliente.id, tipo);
       aoFechar();
     } catch (err) {
       setErroVisita(err.message);
     } finally {
-      setIniciandoVisita(false);
+      setIniciandoVisita("");
     }
   }
 
   const temVisitaEmOutroCliente = visitaPendente && visitaPendente.clienteId !== cliente.id;
   const temVisitaNesteCliente = visitaPendente && visitaPendente.clienteId === cliente.id;
+  const rotuloVisitaAtual = temVisitaNesteCliente && visitaPendente.tipo === "contato" ? "contato" : "visita";
 
   function ordenarPor(coluna) {
     if (ordenarCampo === coluna.campo) {
@@ -271,19 +275,17 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
           <div style={{ marginTop: 14 }}>
             {temVisitaNesteCliente ? (
               <button className="btn btn-primary" onClick={finalizarVisita} disabled={finalizandoVisita}>
-                {finalizandoVisita ? "Finalizando…" : "Finalizar visita"}
+                {finalizandoVisita ? "Finalizando…" : `Finalizar ${rotuloVisitaAtual}`}
               </button>
-            ) : !aceitaVisita ? (
-              <p className="muted" style={{ fontSize: 13 }}>Este cliente não aceita visita presencial.</p>
             ) : temVisitaEmOutroCliente ? (
               // O botão desabilitado com a explicação num title= era invisível
               // no celular: o vendedor tocava e nada acontecia, sem nenhuma
               // pista do motivo. Agora o motivo é o próprio conteúdo da tela.
               <div className="aviso-bloqueio">
-                <b>Você tem uma visita em andamento em outro cliente.</b>
+                <b>Você tem uma visita ou contato em andamento em outro cliente.</b>
                 <span>
-                  Só é possível uma visita por vez. Finalize a que está aberta — ou cancele,
-                  se ela foi aberta por engano.
+                  Só é possível um de cada vez. Finalize o que está aberto — ou cancele,
+                  se foi aberto por engano.
                 </span>
                 <VisitaEmAndamento
                   visita={visitaPendente}
@@ -292,9 +294,27 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
                 />
               </div>
             ) : (
-              <button className="btn btn-primary" onClick={iniciarVisita} disabled={iniciandoVisita}>
-                {iniciandoVisita ? "Iniciando…" : "Iniciar visita"}
-              </button>
+              // "Iniciar contato" fica sempre disponível — é a saída pra quem
+              // não aceita mais visita presencial (calote/sem-visita), que
+              // antes não tinha jeito nenhum de registrar uma ligação aqui.
+              <div className="ficha-acoes-inicio">
+                {aceitaVisita ? (
+                  <button className="btn btn-primary" onClick={() => iniciar("presencial")} disabled={Boolean(iniciandoVisita)}>
+                    {iniciandoVisita === "presencial" ? "Iniciando…" : "Iniciar visita"}
+                  </button>
+                ) : (
+                  <p className="muted" style={{ fontSize: 13, margin: 0 }}>
+                    Este cliente não aceita visita presencial{motivo === "sem-visita" ? " — prefere contato por telefone" : ""}.
+                  </p>
+                )}
+                <button
+                  className={"btn " + (aceitaVisita ? "btn-ghost" : "btn-primary")}
+                  onClick={() => iniciar("contato")}
+                  disabled={Boolean(iniciandoVisita)}
+                >
+                  {iniciandoVisita === "contato" ? "Iniciando…" : "Iniciar contato"}
+                </button>
+              </div>
             )}
             {erroVisita && <div className="login-erro" style={{ marginTop: 8 }}>{erroVisita}</div>}
           </div>
@@ -379,16 +399,26 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
 
         <div className="ficha-secao">
           <span className="filtro-titulo">
-            Histórico de visitas {visitas ? `(${visitas.length})` : ""}
+            Histórico de visitas e contatos {visitas ? `(${visitas.length})` : ""}
           </span>
           {!visitas ? (
             <p className="muted" style={{ fontSize: 13 }}>Carregando…</p>
           ) : visitas.length === 0 ? (
-            <p className="muted" style={{ fontSize: 13 }}>Nenhuma visita registrada ainda.</p>
+            <p className="muted" style={{ fontSize: 13 }}>Nenhuma visita ou contato registrado ainda.</p>
           ) : (
-            visitas.map((v) => (
+            visitas.map((v) => {
+              const duracaoMin = v.fim
+                ? Math.round((dataHoraUtc(v.fim) - dataHoraUtc(v.inicio)) / 60000)
+                : null;
+              return (
               <div key={v.id} className="visita-historico-item">
-                <div className="visita-historico-data">{formatarDataVisita(v.inicio)}</div>
+                <div className="visita-historico-data">
+                  <span className={"chip chip-tipo-" + (v.tipo || "presencial")}>
+                    {v.tipo === "contato" ? "Contato" : "Visita"}
+                  </span>
+                  {" "}{formatarDataVisita(v.inicio)}
+                  {duracaoMin != null && <span className="faint"> · {duracaoMin} min</span>}
+                </div>
                 <div>{v.observacao}</div>
                 {v.retornoData && <div className="visita-historico-promessas">Retorno combinado: {dataTexto(v.retornoData)}</div>}
                 {v.promessas.length > 0 && (
@@ -397,7 +427,8 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
                   </div>
                 )}
               </div>
-            ))
+              );
+            })
           )}
         </div>
 

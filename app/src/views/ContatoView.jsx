@@ -3,15 +3,21 @@ import { scriptContato } from "../lib/recomendacao";
 import { gerarPdfContato } from "../lib/pdf";
 import { DIAS } from "../lib/rota";
 import { FAIXA_COR, FAIXA_CHIP, FAIXA_DOT, brl, telefoneFmt, recenciaTexto } from "../lib/format";
+import FichaCliente from "./FichaCliente";
 
 const PRIO_PESO = { Alta: 0, Média: 1, Baixa: 2 };
 const FXKEY = { Ouro: "gold", Prata: "silver", Bronze: "bronze" };
 const prioClasse = (p) => "prio prio-" + p.toLowerCase().normalize("NFD").replace(/[^a-z]/g, "");
 
-export default function ContatoView({ clientes }) {
+// Mesmo mecanismo da visita presencial (ver FichaCliente/VisitaEmAndamento/
+// RelatorioVisita, todos já preparados pro tipo "contato"): abrir, contar
+// tempo, fechar com relatório — só que iniciado a partir do cartão do Plano
+// de Contato, e sem exigir que o cliente aceite visita presencial.
+export default function ContatoView({ clientes, usuario, aoAtualizarCliente, visitaPendente, aoIniciarVisita, aoFinalizarVisita, aoCancelarVisita }) {
   const [porDia, setPorDia] = useState(20);
   const [dia, setDia] = useState(0);
   const [aberto, setAberto] = useState(null);
+  const [fichaAberta, setFichaAberta] = useState(null);
 
   // fila priorizada: prioridade do contato, depois maior faturamento histórico
   const fila = useMemo(() => {
@@ -26,6 +32,14 @@ export default function ContatoView({ clientes }) {
   const doDia = useMemo(() => fila.slice(dia * porDia, dia * porDia + porDia), [fila, dia, porDia]);
   const valorDia = doDia.reduce((s, x) => s + (x.c.fat || 0), 0);
   const comTelefone = doDia.filter((x) => x.c.telefone).length;
+
+  // Reflete a atualização (status, contato, visita/contato iniciado) tanto
+  // no modal quanto na lista principal do app — sem isso, inativar um
+  // cliente aqui não sumia com ele do resto do app até recarregar a página.
+  function atualizarFicha(atualizado) {
+    setFichaAberta(atualizado);
+    aoAtualizarCliente?.(atualizado);
+  }
 
   if (!clientes.length) return <div className="vazio">Nenhum cliente adormecido neste período.</div>;
 
@@ -71,12 +85,15 @@ export default function ContatoView({ clientes }) {
         <ol className="contato-lista">
           {doDia.map(({ c, s }, i) => {
             const open = aberto === c.id;
+            const emAndamento = visitaPendente?.clienteId === c.id;
             return (
               <li key={c.id} className={"contato-card" + (open ? " aberto" : "")} onClick={() => setAberto(open ? null : c.id)}>
                 <span className={"contato-coin coin-" + FXKEY[c.faixa]}>{dia * porDia + i + 1}</span>
                 <div className="contato-info">
                   <div className="contato-topo">
-                    <span className="contato-nome">{c.nome}</span>
+                    <span className="contato-nome">
+                      {c.nome} {c.temPromessaPendente && <span title="Tem promessa pendente">🎁</span>}
+                    </span>
                     <span className={prioClasse(s.prioridade)}>{s.prioridade}</span>
                   </div>
                   <div className="contato-tags">
@@ -99,12 +116,35 @@ export default function ContatoView({ clientes }) {
                       <p>{s.script}</p>
                     </div>
                   )}
+                  {/* Mesma ação de "abrir ficha" nos dois estados (cartão
+                      fechado ou aberto) — não precisa expandir o script pra
+                      conseguir registrar o contato. */}
+                  <button
+                    type="button"
+                    className={"btn contato-btn-iniciar" + (emAndamento ? " btn-primary" : " btn-ghost")}
+                    onClick={(e) => { e.stopPropagation(); setFichaAberta(c); }}
+                  >
+                    {emAndamento ? "Contato em andamento — abrir ficha" : "Abrir ficha / iniciar contato"}
+                  </button>
                 </div>
               </li>
             );
           })}
         </ol>
       </div>
+
+      {fichaAberta && (
+        <FichaCliente
+          cliente={fichaAberta}
+          aoFechar={() => setFichaAberta(null)}
+          aoAtualizar={atualizarFicha}
+          visitaPendente={visitaPendente}
+          aoIniciarVisita={aoIniciarVisita}
+          aoFinalizarVisita={aoFinalizarVisita}
+          aoCancelarVisita={aoCancelarVisita}
+          usuario={usuario}
+        />
+      )}
     </div>
   );
 }

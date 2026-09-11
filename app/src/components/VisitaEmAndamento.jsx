@@ -30,12 +30,17 @@ export default function VisitaEmAndamento({ visita, nomeCliente, aoFinalizar, ao
     ? new Date(visita.inicio + "Z").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
     : null;
 
+  // Mesmo componente/fluxo pros dois tipos (ver services/visitas.py no
+  // backend) — só o texto muda, pra não chamar de "visita" uma ligação.
+  const ehContato = visita?.tipo === "contato";
+  const rotulo = ehContato ? "Contato" : "Visita";
+
   return (
     <div className={"visita-andamento" + (compacto ? " compacto" : "")}>
       {!compacto && (
         <span className="visita-andamento-texto">
-          <b>Visita em andamento</b>
-          {nomeCliente ? <> em {nomeCliente}</> : null}
+          <b>{rotulo} em andamento</b>
+          {nomeCliente ? <> {ehContato ? "com" : "em"} {nomeCliente}</> : null}
           {horaInicio ? <span className="faint"> · desde {horaInicio}</span> : null}
         </span>
       )}
@@ -46,7 +51,7 @@ export default function VisitaEmAndamento({ visita, nomeCliente, aoFinalizar, ao
           onClick={() => executar(aoFinalizar, "finalizar")}
           disabled={Boolean(ocupado)}
         >
-          {ocupado === "finalizar" ? "Finalizando…" : "Finalizar visita"}
+          {ocupado === "finalizar" ? "Finalizando…" : `Finalizar ${rotulo.toLowerCase()}`}
         </button>
 
         {confirmando ? (
@@ -65,7 +70,7 @@ export default function VisitaEmAndamento({ visita, nomeCliente, aoFinalizar, ao
           </>
         ) : (
           <button className="btn btn-ghost" onClick={() => setConfirmando(true)} disabled={Boolean(ocupado)}>
-            Cancelar visita
+            Cancelar {rotulo.toLowerCase()}
           </button>
         )}
       </div>

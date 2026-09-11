@@ -72,8 +72,10 @@ export default function App() {
     setVisitaPendente(null);
   }
 
-  async function iniciarVisita(clienteId) {
-    const visita = await api.post("/api/visitas", { clienteId });
+  // tipo: "presencial" (padrão, visita em campo) ou "contato" (ligação do
+  // Plano de Contato) — mesmo fluxo bloqueante pros dois, ver services/visitas.py.
+  async function iniciarVisita(clienteId, tipo = "presencial") {
+    const visita = await api.post("/api/visitas", { clienteId, tipo });
     setVisitaPendente(visita);
     return visita;
   }
@@ -207,7 +209,16 @@ export default function App() {
             usuario={usuario}
           />
         ) : aba === "Plano da Semana" ? (
-          <PlanoView clientes={clientes} usuario={usuario} aoAbrirRotaDoDia={() => setAba("Rota do Dia")} />
+          <PlanoView
+            clientes={clientes}
+            usuario={usuario}
+            aoAbrirRotaDoDia={() => setAba("Rota do Dia")}
+            aoAtualizarCliente={atualizarClienteLocal}
+            visitaPendente={visitaPendente}
+            aoIniciarVisita={iniciarVisita}
+            aoFinalizarVisita={finalizarVisita}
+            aoCancelarVisita={cancelarVisita}
+          />
         ) : aba === "Rota do Dia" ? (
           <RotaDiaView
             aoAtualizarCliente={atualizarClienteLocal}
@@ -239,8 +250,17 @@ export default function App() {
         <Suspense fallback={<div className="vazio">Abrindo o relatório da visita…</div>}>
           <RelatorioVisita
             visita={visitaPendente}
-            aoSalvo={() => {
+            aoSalvo={async () => {
               setVisitasHojeIds((s) => new Set(s).add(visitaPendente.clienteId));
+              // O relatório pode ter mudado status/aceitaVisita do cliente
+              // (ex.: inativar pelo Plano de Contato) — sem buscar o cliente
+              // de novo aqui, ele continuava aparecendo normal no resto do
+              // app (Mapa, contadores do Plano da Semana) até recarregar a
+              // página inteira.
+              try {
+                const atualizado = await api.get(`/api/clientes/${visitaPendente.clienteId}`);
+                atualizarClienteLocal(atualizado);
+              } catch { /* lista principal fica com o dado antigo até recarregar — não é crítico */ }
               setVisitaPendente(null);
             }}
           />

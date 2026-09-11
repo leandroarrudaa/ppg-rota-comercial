@@ -22,9 +22,9 @@ def _cliente_ouro_id(db):
     return db.query(Cliente).filter(Cliente.nome == "Empresa Ouro LTDA").first().id
 
 
-def _visita_finalizada(db, *, cliente_id, vendedor_id, inicio, duracao_min=20, retorno_dias=None):
+def _visita_finalizada(db, *, cliente_id, vendedor_id, inicio, duracao_min=20, retorno_dias=None, tipo="presencial"):
     v = Visita(
-        cliente_id=cliente_id, vendedor_id=vendedor_id, inicio=inicio,
+        cliente_id=cliente_id, vendedor_id=vendedor_id, inicio=inicio, tipo=tipo,
         fim=inicio + timedelta(minutes=duracao_min), status=StatusVisita.FINALIZADA,
         observacao="ok", retorno_dias=retorno_dias,
         retorno_data=(inicio.date() + timedelta(days=retorno_dias)) if retorno_dias else None,
@@ -101,10 +101,36 @@ def test_resumo_calcula_duracao_media_promessas_e_retornos(cliente_http, db, adm
     r = cliente_http.get("/api/relatorios/visitas?inicio=2026-08-24&fim=2026-08-24", headers=_auth(vendedor))
     resumo = r.json()["resumo"]
     assert resumo["totalVisitas"] == 2
+    assert resumo["totalPresenciais"] == 2
+    assert resumo["totalContatos"] == 0
     assert resumo["clientesUnicos"] == 1
     assert resumo["duracaoMediaMin"] == 20  # média de 10 e 30
     assert resumo["promessasFeitas"] == 1
     assert resumo["retornosAgendados"] == 1
+
+
+def test_resumo_separa_presencial_de_contato_e_filtro_tipo_funciona(cliente_http, db, admin_e_vendedor):
+    _, vendedor = admin_e_vendedor
+    cliente_id = _cliente_ouro_id(db)
+    _visita_finalizada(db, cliente_id=cliente_id, vendedor_id=vendedor.id,
+                        inicio=datetime(2026, 8, 24, 9, 0, 0), tipo="presencial")
+    _visita_finalizada(db, cliente_id=cliente_id, vendedor_id=vendedor.id,
+                        inicio=datetime(2026, 8, 24, 10, 0, 0), tipo="contato")
+    _visita_finalizada(db, cliente_id=cliente_id, vendedor_id=vendedor.id,
+                        inicio=datetime(2026, 8, 24, 11, 0, 0), tipo="contato")
+
+    r = cliente_http.get("/api/relatorios/visitas?inicio=2026-08-24&fim=2026-08-24", headers=_auth(vendedor))
+    resumo = r.json()["resumo"]
+    assert resumo["totalVisitas"] == 3
+    assert resumo["totalPresenciais"] == 1
+    assert resumo["totalContatos"] == 2
+    assert {item["tipo"] for item in r.json()["visitas"]} == {"presencial", "contato"}
+
+    so_contato = cliente_http.get(
+        "/api/relatorios/visitas?inicio=2026-08-24&fim=2026-08-24&tipo=contato", headers=_auth(vendedor)
+    ).json()
+    assert so_contato["resumo"]["totalVisitas"] == 2
+    assert all(item["tipo"] == "contato" for item in so_contato["visitas"])
 
 
 def test_fim_antes_do_inicio_e_rejeitado(cliente_http, admin_e_vendedor):

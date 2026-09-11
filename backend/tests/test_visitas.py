@@ -75,6 +75,58 @@ def test_nao_pode_abrir_visita_pra_cliente_que_nao_aceita_visita(cliente_http, t
     assert r.status_code == 400
 
 
+def test_visita_sem_tipo_abre_como_presencial(cliente_http, token):
+    cliente = _cliente_ouro(cliente_http, token)
+    r = cliente_http.post("/api/visitas", json={"clienteId": cliente["id"]}, headers=_auth(token))
+    assert r.json()["tipo"] == "presencial"
+
+
+def test_contato_pode_ser_aberto_mesmo_sem_aceitar_visita_presencial(cliente_http, token):
+    """O Plano de Contato existe justamente pra quem não aceita mais visita
+    presencial (calote/sem-visita) — o contato por telefone não pode ficar
+    bloqueado pela mesma regra."""
+    cliente = _cliente_ouro(cliente_http, token)
+    cliente_http.patch(
+        f"/api/clientes/{cliente['id']}",
+        json={"aceitaVisita": False, "motivoRecusaVisita": "sem-visita"},
+        headers=_auth(token),
+    )
+    r = cliente_http.post(
+        "/api/visitas", json={"clienteId": cliente["id"], "tipo": "contato"}, headers=_auth(token)
+    )
+    assert r.status_code == 200
+    assert r.json()["tipo"] == "contato"
+    assert r.json()["status"] == "aberta"
+
+
+def test_contato_finalizado_pode_inativar_cliente_pelo_relatorio(cliente_http, token):
+    cliente = _cliente_ouro(cliente_http, token)
+    visita = cliente_http.post(
+        "/api/visitas", json={"clienteId": cliente["id"], "tipo": "contato"}, headers=_auth(token)
+    ).json()
+    cliente_http.patch(f"/api/visitas/{visita['id']}/finalizar", headers=_auth(token))
+
+    r = cliente_http.post(
+        f"/api/visitas/{visita['id']}/relatorio",
+        json={"observacao": "Empresa não existe mais no endereço.", "status": "inativo"},
+        headers=_auth(token),
+    )
+    assert r.status_code == 200
+
+    atualizado = cliente_http.get(f"/api/clientes/{cliente['id']}", headers=_auth(token)).json()
+    assert atualizado["status"] == "inativo"
+
+
+def test_visita_e_contato_nao_podem_ficar_abertos_ao_mesmo_tempo(cliente_http, token):
+    """Mesma regra bloqueante de antes, agora valendo pros dois tipos juntos —
+    um contato aberto também impede abrir uma visita presencial, e vice-versa."""
+    cliente = _cliente_ouro(cliente_http, token)
+    outro = _cliente_bronze(cliente_http, token)
+    cliente_http.post("/api/visitas", json={"clienteId": cliente["id"], "tipo": "contato"}, headers=_auth(token))
+    r = cliente_http.post("/api/visitas", json={"clienteId": outro["id"]}, headers=_auth(token))
+    assert r.status_code == 409
+
+
 def test_relatorio_exige_observacao_nao_vazia(cliente_http, token):
     cliente = _cliente_ouro(cliente_http, token)
     visita = cliente_http.post("/api/visitas", json={"clienteId": cliente["id"]}, headers=_auth(token)).json()

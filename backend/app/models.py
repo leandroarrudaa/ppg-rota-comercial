@@ -174,16 +174,30 @@ class StatusVisita(str, enum.Enum):
     FINALIZADA = "finalizada"
 
 
+class TipoVisita(str, enum.Enum):
+    """PRESENCIAL = visita em campo (exige aceita_visita=true). CONTATO =
+    ligação/mensagem do Plano de Contato — mesmo fluxo bloqueante, mesmo
+    controle de tempo e relatório, mas sem exigir que o cliente aceite
+    visita presencial (é justamente o caso de quem não aceita mais)."""
+    PRESENCIAL = "presencial"
+    CONTATO = "contato"
+
+
 class Visita(Base):
-    """Uma visita presencial a um cliente. O fluxo é bloqueante: entre
-    'finalizar' (grava fim) e o relatório salvo, o vendedor não pode abrir
-    outra visita — reforçado pelo backend (ver services/visitas.py) e pelo
-    modal bloqueante do frontend."""
+    """Uma visita presencial OU um contato por telefone (ver TipoVisita) a um
+    cliente. O fluxo é bloqueante: entre 'finalizar' (grava fim) e o relatório
+    salvo, o vendedor não pode abrir outra visita/contato — reforçado pelo
+    backend (ver services/visitas.py) e pelo modal bloqueante do frontend."""
     __tablename__ = "visitas"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"), index=True)
     vendedor_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), index=True)
+    # String simples, não Enum do Postgres de propósito: essa coluna é
+    # acrescentada numa tabela que já existe em produção via ALTER TABLE
+    # idempotente (ver database.py, _COLUNAS_NOVAS) — um tipo ENUM nativo
+    # exigiria CREATE TYPE antes, que esse caminho simples não cobre.
+    tipo: Mapped[str] = mapped_column(String(20), default=TipoVisita.PRESENCIAL.value)
     inicio: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     fim: Mapped[datetime | None] = mapped_column(DateTime)
     status: Mapped[StatusVisita] = mapped_column(Enum(StatusVisita), default=StatusVisita.ABERTA)

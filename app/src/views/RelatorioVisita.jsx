@@ -8,11 +8,24 @@ const OPCOES_RETORNO = [
   { label: "Outro", dias: "custom" },
 ];
 
+// Atalhos pro motivo mais comum de inativar pelo Plano de Contato — só
+// preenchem a observação, não travam em texto fixo (o vendedor pode
+// complementar). Não existe um campo estruturado de motivo de inativação
+// no banco; a observação já é obrigatória, então é ela que registra o porquê.
+const MOTIVOS_INATIVACAO = [
+  "Empresa não existe mais / fechou",
+  "Não atende, não responde",
+  "Mudou de ramo, não é mais público",
+];
+
 // Modal BLOQUEANTE: aparece assim que a visita é finalizada e não pode ser
 // fechado sem salvar o relatório — decisão explícita do usuário (preencher
 // depois faz esquecer detalhes). Vem pré-carregado com o último status
 // conhecido do cliente pra não obrigar preencher tudo de novo.
 export default function RelatorioVisita({ visita, aoSalvo }) {
+  const ehContato = visita.tipo === "contato";
+  const rotulo = ehContato ? "contato" : "visita";
+
   const [cliente, setCliente] = useState(null);
   const [observacao, setObservacao] = useState("");
   const [retornoOpcao, setRetornoOpcao] = useState(15);
@@ -23,6 +36,14 @@ export default function RelatorioVisita({ visita, aoSalvo }) {
   const [motivo, setMotivo] = useState("calote");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
+
+  // Preenche a observação com o motivo — não trava o texto, só poupa
+  // digitação, e já deixa o status marcado como inativo (é o botão pra
+  // exatamente isso: "cliente não existe mais", "não atende", etc.).
+  function usarMotivoInativacao(texto) {
+    setObservacao((atual) => (atual.trim() ? `${atual.trim()} — ${texto}` : texto));
+    setStatus("inativo");
+  }
 
   useEffect(() => {
     api.get(`/api/clientes/${visita.clienteId}`).then((c) => {
@@ -46,7 +67,7 @@ export default function RelatorioVisita({ visita, aoSalvo }) {
   async function salvar(e) {
     e.preventDefault();
     if (!observacao.trim()) {
-      setErro("Descreva como foi a visita.");
+      setErro(`Descreva como foi o ${rotulo}.`);
       return;
     }
     setEnviando(true);
@@ -73,18 +94,20 @@ export default function RelatorioVisita({ visita, aoSalvo }) {
     <div className="modal-fundo modal-bloqueante">
       <div className="modal-ficha">
         <div className="ficha-header">
-          <h2>Relatório da visita</h2>
+          <h2>Relatório d{ehContato ? "o" : "a"} {rotulo}</h2>
           <p className="muted" style={{ fontSize: 13 }}>
-            {cliente ? cliente.nome : "Carregando cliente…"} · visita finalizada, preencha antes de continuar
+            {cliente ? cliente.nome : "Carregando cliente…"} · {rotulo} finalizad{ehContato ? "o" : "a"}, preencha antes de continuar
           </p>
         </div>
 
         <form onSubmit={salvar}>
           <div className="ficha-secao" style={{ marginTop: 12, paddingTop: 0, borderTop: "none" }}>
-            <span className="filtro-titulo">Como foi a visita</span>
+            <span className="filtro-titulo">Como foi {ehContato ? "o contato" : "a visita"}</span>
             <textarea
               className="input" rows={3}
-              placeholder="Ex.: cliente satisfeito, fechou pedido de reposição…"
+              placeholder={ehContato
+                ? "Ex.: falei com o financeiro, disse que liga na semana que vem…"
+                : "Ex.: cliente satisfeito, fechou pedido de reposição…"}
               value={observacao} onChange={(e) => setObservacao(e.target.value)}
               autoFocus
             />
@@ -129,6 +152,18 @@ export default function RelatorioVisita({ visita, aoSalvo }) {
 
           <div className="ficha-secao">
             <span className="filtro-titulo">Status do cliente</span>
+            {ehContato && (
+              <div className="motivos-inativacao">
+                <span className="faint" style={{ fontSize: 12 }}>Cliente não dá mais pra atender?</span>
+                <div className="motivos-inativacao-chips">
+                  {MOTIVOS_INATIVACAO.map((m) => (
+                    <button key={m} type="button" className="btn btn-ghost" onClick={() => usarMotivoInativacao(m)}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="ficha-status">
               <label className="ficha-radio">
                 <input type="radio" checked={status === "ativo"} onChange={() => setStatus("ativo")} /> Ativo

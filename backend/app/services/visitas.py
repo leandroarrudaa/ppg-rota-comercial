@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
-from ..models import Cliente, Promessa, StatusVisita, Usuario, Visita
+from ..models import Cliente, Promessa, StatusVisita, TipoVisita, Usuario, Visita
 from ..schemas import ClienteAtualizar, PromessaOut, RelatorioVisita, VisitaOut
 from . import clientes as clientes_svc
 from .tempo import agora_utc, hoje_brasil, inicio_do_dia_brasil_em_utc
@@ -18,6 +18,7 @@ def _para_saida(v: Visita) -> VisitaOut:
         id=v.id,
         clienteId=v.cliente_id,
         vendedorId=v.vendedor_id,
+        tipo=v.tipo,
         inicio=v.inicio,
         fim=v.fim,
         status=v.status,
@@ -51,21 +52,24 @@ def visita_pendente(db: Session, vendedor: Usuario) -> VisitaOut | None:
     return _para_saida(v) if v else None
 
 
-def abrir(db: Session, vendedor: Usuario, cliente_id: int) -> VisitaOut:
+def abrir(db: Session, vendedor: Usuario, cliente_id: int, tipo: TipoVisita = TipoVisita.PRESENCIAL) -> VisitaOut:
     if visita_pendente(db, vendedor) is not None:
         raise HTTPException(
             status_code=409,
-            detail="Você já tem uma visita em andamento. Finalize-a antes de abrir outra.",
+            detail="Você já tem uma visita ou contato em andamento. Finalize antes de abrir outro.",
         )
     cliente = db.get(Cliente, cliente_id)
     if cliente is None:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
-    if not cliente.aceita_visita:
+    # A restrição de "não aceita visita" vale só pra presencial — é
+    # justamente o cliente que só recebe contato por telefone (motivo
+    # SEM_VISITA) que mais precisa poder abrir um contato aqui.
+    if tipo == TipoVisita.PRESENCIAL and not cliente.aceita_visita:
         raise HTTPException(
             status_code=400,
             detail="Este cliente está marcado como 'não aceita visita' — não é possível registrar uma visita presencial.",
         )
-    v = Visita(cliente_id=cliente_id, vendedor_id=vendedor.id)
+    v = Visita(cliente_id=cliente_id, vendedor_id=vendedor.id, tipo=tipo)
     db.add(v)
     db.commit()
     db.refresh(v)
@@ -131,13 +135,21 @@ def salvar_relatorio(db: Session, vendedor: Usuario, visita_id: int, dados: Rela
     # valida e aplica ajustes de cliente ANTES de mexer na visita — se a
     # combinação for inválida (ex.: aceitaVisita=false sem motivo), nada
     # deve ficar meio-salvo.
+    # Só entra no dict quem veio preenchido: ClienteAtualizar.atualizar() só
+    # toca no que foi "setado" (exclude_unset) — passar aceitaVisita=None
+    # explicitamente (em vez de omitir) fazia `atualizar` interpretar como
+    # "limpar o campo" e gravar NULL numa coluna NOT NULL, por exemplo ao
+    # inativar um cliente pelo relatório do contato sem mexer em aceitaVisita.
     if dados.status is not None or dados.aceitaVisita is not None or dados.motivoRecusaVisita is not None:
         cliente = db.get(Cliente, v.cliente_id)
-        clientes_svc.atualizar(cliente, ClienteAtualizar(
-            status=dados.status,
-            aceitaVisita=dados.aceitaVisita,
-            motivoRecusaVisita=dados.motivoRecusaVisita,
-        ))
+        ajustes = {}
+        if dados.status is not None:
+            ajustes["status"] = dados.status
+        if dados.aceitaVisita is not None:
+            ajustes["aceitaVisita"] = dados.aceitaVisita
+        if dados.motivoRecusaVisita is not None:
+            ajustes["motivoRecusaVisita"] = dados.motivoRecusaVisita
+        clientes_svc.atualizar(cliente, ClienteAtualizar(**ajustes))
 
     v.observacao = dados.observacao.strip()
     v.retorno_dias = dados.retornoDias

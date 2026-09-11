@@ -7,7 +7,10 @@ const FXKEY = { Ouro: "gold", Prata: "silver", Bronze: "bronze" };
 const NOTAS_RFM = [1, 2, 3, 4, 5];
 const RFM_PADRAO = { rMin: 1, rMax: 5, fMin: 1, fMax: 5, mMin: 1, mMax: 5 };
 
-export default function PlanoView({ clientes, usuario, aoAbrirRotaDoDia }) {
+export default function PlanoView({
+  clientes, usuario, aoAbrirRotaDoDia,
+  aoAtualizarCliente, visitaPendente, aoIniciarVisita, aoFinalizarVisita, aoCancelarVisita,
+}) {
   const [sub, setSub] = useState("Visitas");
   const [meses, setMeses] = useState(6); // "ativo" = comprou nos últimos N meses
   const [faturamentoMin, setFaturamentoMin] = useState(0);
@@ -19,6 +22,9 @@ export default function PlanoView({ clientes, usuario, aoAbrirRotaDoDia }) {
   // enxuta (era isso que ficava "esquisito": tudo sempre aberto, alturas
   // diferentes, a fileira toda desalinhada).
   const [avancadoAberto, setAvancadoAberto] = useState(false);
+  // Só importa no mobile (CSS): no desktop os filtros continuam sempre
+  // visíveis, independente desse estado — ver .btn-toggle-filtros-claro.
+  const [filtrosMobileAbertos, setFiltrosMobileAbertos] = useState(false);
 
   // Ramos distintos presentes na carteira carregada — só clientes antigos
   // enriquecidos por CNPJ têm essa informação (cadastro manual em campo não tem).
@@ -103,6 +109,15 @@ export default function PlanoView({ clientes, usuario, aoAbrirRotaDoDia }) {
       </div>
 
       <div className="plano-filtros">
+        <button
+          type="button"
+          className="btn-toggle-filtros-claro"
+          onClick={() => setFiltrosMobileAbertos((v) => !v)}
+        >
+          {filtrosMobileAbertos ? "▲ Fechar filtros" : `▾ Filtros${temFiltro ? " · ativos" : ""}`}
+        </button>
+
+        <div className={"plano-filtros-corpo" + (filtrosMobileAbertos ? " aberto" : "")}>
         <div className="plano-filtros-linha">
           <div className="filtro-grupo">
             <span className="filtro-titulo">Faturamento mínimo</span>
@@ -221,12 +236,23 @@ export default function PlanoView({ clientes, usuario, aoAbrirRotaDoDia }) {
             </button>
           </div>
         )}
+        </div>
       </div>
 
       <div className="plano-corpo">
         {sub === "Visitas"
           ? <VisitasView clientes={ativos} usuario={usuario} aoAbrirRotaDoDia={aoAbrirRotaDoDia} />
-          : <ContatoView clientes={adormecidos} />}
+          : (
+            <ContatoView
+              clientes={adormecidos}
+              usuario={usuario}
+              aoAtualizarCliente={aoAtualizarCliente}
+              visitaPendente={visitaPendente}
+              aoIniciarVisita={aoIniciarVisita}
+              aoFinalizarVisita={aoFinalizarVisita}
+              aoCancelarVisita={aoCancelarVisita}
+            />
+          )}
       </div>
     </div>
   );

@@ -37,7 +37,7 @@ def abrir(
     usuario: Usuario = Depends(auth.usuario_atual),
     db: Session = Depends(get_db),
 ):
-    return svc.abrir(db, usuario, body.clienteId)
+    return svc.abrir(db, usuario, body.clienteId, body.tipo)
 
 
 @router.patch("/{visita_id}/finalizar", response_model=VisitaOut)

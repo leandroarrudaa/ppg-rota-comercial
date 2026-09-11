@@ -88,6 +88,10 @@ def garantir_indices() -> None:
 # Alembic, o caminho é o mesmo dos índices: DDL idempotente, roda toda vez.
 _COLUNAS_NOVAS = [
     ("clientes", "primeira_compra", "DATE"),
+    # DEFAULT na própria coluna: Postgres e SQLite preenchem as linhas já
+    # existentes com esse valor ao acrescentar a coluna — sem isso, toda
+    # visita registrada antes desta mudança ficaria com tipo nulo.
+    ("visitas", "tipo", "VARCHAR(20) DEFAULT 'presencial'"),
 ]
 
 

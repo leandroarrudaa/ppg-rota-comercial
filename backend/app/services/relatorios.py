@@ -7,17 +7,19 @@ from datetime import date, timedelta
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, selectinload
 
-from ..models import PapelUsuario, StatusVisita, Usuario, Visita
+from ..models import PapelUsuario, StatusVisita, TipoVisita, Usuario, Visita
 from ..schemas import PromessaOut, RelatorioResumo, RelatorioVisitasOut, VisitaRelatorioItem
 from .tempo import inicio_do_dia_brasil_em_utc
 
 
 def relatorio_visitas(
-    db: Session, *, usuario: Usuario, inicio: date, fim: date, vendedor_id: int | None
+    db: Session, *, usuario: Usuario, inicio: date, fim: date, vendedor_id: int | None,
+    tipo: TipoVisita | None = None,
 ) -> RelatorioVisitasOut:
     """Visitas FINALIZADAS no período [inicio, fim] — datas de calendário em
     Brasília, ambas inclusive. Vendedor só enxerga as próprias visitas; admin
-    vê de todo mundo por padrão, ou de um vendedor específico via vendedor_id."""
+    vê de todo mundo por padrão, ou de um vendedor específico via vendedor_id.
+    tipo filtra presencial x contato; omitido traz os dois juntos."""
     if usuario.papel != PapelUsuario.ADMIN:
         if vendedor_id is not None and vendedor_id != usuario.id:
             raise HTTPException(status_code=403, detail="Você só pode ver suas próprias visitas.")
@@ -41,6 +43,8 @@ def relatorio_visitas(
     )
     if vendedor_id is not None:
         q = q.filter(Visita.vendedor_id == vendedor_id)
+    if tipo is not None:
+        q = q.filter(Visita.tipo == tipo)
     visitas = q.order_by(Visita.inicio.desc()).all()
 
     return RelatorioVisitasOut(
@@ -58,6 +62,7 @@ def _para_item(v: Visita) -> VisitaRelatorioItem:
         clienteCidade=v.cliente.cidade if v.cliente else None,
         vendedorId=v.vendedor_id,
         vendedorNome=v.vendedor.nome if v.vendedor else "—",
+        tipo=v.tipo,
         inicio=v.inicio,
         fim=v.fim,
         duracaoMin=duracao,
@@ -78,6 +83,8 @@ def _montar_resumo(visitas: list[Visita]) -> RelatorioResumo:
     duracoes = [(v.fim - v.inicio).total_seconds() / 60 for v in visitas if v.fim]
     return RelatorioResumo(
         totalVisitas=len(visitas),
+        totalPresenciais=sum(1 for v in visitas if v.tipo == TipoVisita.PRESENCIAL),
+        totalContatos=sum(1 for v in visitas if v.tipo == TipoVisita.CONTATO),
         clientesUnicos=len({v.cliente_id for v in visitas}),
         duracaoMediaMin=round(sum(duracoes) / len(duracoes)) if duracoes else None,
         promessasFeitas=sum(len(v.promessas) for v in visitas),
