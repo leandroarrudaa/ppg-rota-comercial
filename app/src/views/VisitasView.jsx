@@ -40,6 +40,13 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   const [estrada, setEstrada] = useState(null);
   const [carregandoRota, setCarregandoRota] = useState(false);
   const [aberto, setAberto] = useState(null);
+  // Só importa no mobile (CSS): dia/capacidade/resumo/PDF recolhidos por
+  // padrão pra sobrar tela pra lista de visitas, que é o que se usa o tempo
+  // todo — no desktop esses controles continuam sempre visíveis. Mesma ideia
+  // pro toggle painel/mapa: no celular os dois espremidos juntos ficam
+  // pequenos demais pra usar (lista ilegível, mapa minúsculo).
+  const [opcoesAbertas, setOpcoesAbertas] = useState(false);
+  const [modoMobile, setModoMobile] = useState("painel");
   const mapRef = useRef(null);
   const markerRefs = useRef({});
 
@@ -110,68 +117,88 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   const linha = estrada ? estrada.linha : plano.clientes.map((c) => [c.lat, c.lng]);
 
   return (
-    <div className="mapa-layout">
+    <div className={"mapa-layout" + (modoMobile === "mapa" ? " modo-mapa-mobile" : " modo-painel-mobile")}>
+      <button
+        type="button"
+        className="btn-alternar-mobile"
+        onClick={() => setModoMobile((m) => (m === "mapa" ? "painel" : "mapa"))}
+      >
+        {modoMobile === "mapa" ? "☰ Ver lista" : "🗺️ Ver mapa"}
+      </button>
+
       <aside className="painel">
         <div className="painel-head">
           <h3>Plano de visitas</h3>
           <p className="muted" style={{ fontSize: 13 }}>Rota presencial · valor + economia</p>
         </div>
 
-        <div className="dias">
-          {DIAS.map((d, i) => (
-            <button key={d} className={"dia-btn" + (i === dia ? " on" : "")} onClick={() => setDia(i)}>
-              {d.slice(0, 3)}
-            </button>
-          ))}
-        </div>
-
-        <div className="filtro-grupo">
-          <span className="filtro-titulo">Visitas por dia: <b>{capacidade}</b></span>
-          <input type="range" min="5" max="25" value={capacidade} onChange={(e) => setCapacidade(+e.target.value)} className="slider" />
-        </div>
-
-        {aguardando > 0 && (
-          <label className="agenda-chave">
-            <input
-              type="checkbox"
-              checked={incluirNaoVencidos}
-              onChange={(e) => setIncluirNaoVencidos(e.target.checked)}
-            />
-            <span>
-              Incluir quem ainda não venceu
-              <small className="faint">
-                {" · "}{aguardando === 1
-                  ? "1 visitado há pouco está de fora"
-                  : `${aguardando} visitados há pouco estão de fora`}
-              </small>
-            </span>
-          </label>
-        )}
-
-        <div className="resumo">
-          <div className="resumo-item"><span>Visitas</span><b>{plano.clientes.length}</b></div>
-          <div className="resumo-item"><span>Distância</span><b>{km.toFixed(0)} km {carregandoRota && <small className="faint">…</small>}</b></div>
-          <div className="resumo-item"><span>Tempo em rota</span><b>{Math.floor(min / 60)}h{String(Math.round(min % 60)).padStart(2, "0")}</b></div>
-          <div className="resumo-item destaque"><span>Faturamento do roteiro</span><b>{brl(plano.valor)}</b></div>
-        </div>
-
-        {aoAbrirRotaDoDia && usuario && (
-          <button
-            className="btn btn-primary"
-            style={{ width: "100%", justifyContent: "center" }}
-            onClick={usarHoje}
-          >
-            Usar esta rota hoje
-          </button>
-        )}
-
         <button
-          className="btn btn-ghost"
-          style={{ width: "100%", justifyContent: "center" }}
-          onClick={() => gerarPdfDia({ diaNome: DIAS[dia], clientes: plano.clientes, km, min, valor: plano.valor })}
+          type="button"
+          className="btn-toggle-filtros"
+          onClick={() => setOpcoesAbertas((v) => !v)}
         >
-          Baixar PDF da rota
+          {opcoesAbertas
+            ? "▲ Menos opções"
+            : `▾ ${DIAS[dia]} · ${capacidade}/dia · ${brl(plano.valor)}`}
         </button>
+
+        <div className={"visitas-opcoes-extra" + (opcoesAbertas ? " aberto" : "")}>
+          <div className="dias">
+            {DIAS.map((d, i) => (
+              <button key={d} className={"dia-btn" + (i === dia ? " on" : "")} onClick={() => setDia(i)}>
+                {d.slice(0, 3)}
+              </button>
+            ))}
+          </div>
+
+          <div className="filtro-grupo">
+            <span className="filtro-titulo">Visitas por dia: <b>{capacidade}</b></span>
+            <input type="range" min="5" max="25" value={capacidade} onChange={(e) => setCapacidade(+e.target.value)} className="slider" />
+          </div>
+
+          {aguardando > 0 && (
+            <label className="agenda-chave">
+              <input
+                type="checkbox"
+                checked={incluirNaoVencidos}
+                onChange={(e) => setIncluirNaoVencidos(e.target.checked)}
+              />
+              <span>
+                Incluir quem ainda não venceu
+                <small className="faint">
+                  {" · "}{aguardando === 1
+                    ? "1 visitado há pouco está de fora"
+                    : `${aguardando} visitados há pouco estão de fora`}
+                </small>
+              </span>
+            </label>
+          )}
+
+          <div className="resumo">
+            <div className="resumo-item"><span>Visitas</span><b>{plano.clientes.length}</b></div>
+            <div className="resumo-item"><span>Distância</span><b>{km.toFixed(0)} km {carregandoRota && <small className="faint">…</small>}</b></div>
+            <div className="resumo-item"><span>Tempo em rota</span><b>{Math.floor(min / 60)}h{String(Math.round(min % 60)).padStart(2, "0")}</b></div>
+            <div className="resumo-item destaque"><span>Faturamento do roteiro</span><b>{brl(plano.valor)}</b></div>
+          </div>
+
+          {aoAbrirRotaDoDia && usuario && (
+            <button
+              className="btn btn-primary"
+              style={{ width: "100%", justifyContent: "center" }}
+              onClick={usarHoje}
+            >
+              Usar esta rota hoje
+            </button>
+          )}
+
+          <button
+            className="btn btn-ghost"
+            style={{ width: "100%", justifyContent: "center" }}
+            onClick={() => gerarPdfDia({ diaNome: DIAS[dia], clientes: plano.clientes, km, min, valor: plano.valor })}
+          >
+            Baixar PDF da rota
+          </button>
+        </div>
 
         <div className="filtro-grupo">
           <span className="filtro-titulo">Ordem de visita <span className="faint" style={{ textTransform: "none", fontWeight: 500 }}>· toque para ver a ação</span></span>

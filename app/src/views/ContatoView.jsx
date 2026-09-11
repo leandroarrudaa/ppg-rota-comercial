@@ -18,6 +18,10 @@ export default function ContatoView({ clientes, usuario, aoAtualizarCliente, vis
   const [dia, setDia] = useState(0);
   const [aberto, setAberto] = useState(null);
   const [fichaAberta, setFichaAberta] = useState(null);
+  // Só importa no mobile (CSS): dia/quantidade/resumo/baixar recolhidos por
+  // padrão — sem isso a lista de contatos só aparecia depois de rolar a
+  // tela toda. No desktop esses controles continuam sempre visíveis.
+  const [opcoesAbertas, setOpcoesAbertas] = useState(false);
 
   // fila priorizada: prioridade do contato, depois maior faturamento histórico
   const fila = useMemo(() => {
@@ -51,33 +55,45 @@ export default function ContatoView({ clientes, usuario, aoAtualizarCliente, vis
           <p className="muted" style={{ fontSize: 13 }}>Reativar adormecidos · agendar visita</p>
         </div>
 
-        <div className="dias">
-          {DIAS.map((d, i) => (
-            <button key={d} className={"dia-btn" + (i === dia ? " on" : "")} onClick={() => setDia(i)}>
-              {d.slice(0, 3)}
-            </button>
-          ))}
-        </div>
-
-        <div className="filtro-grupo">
-          <span className="filtro-titulo">Contatos por dia: <b>{porDia}</b></span>
-          <input type="range" min="10" max="50" value={porDia} onChange={(e) => { setPorDia(+e.target.value); setDia(0); }} className="slider" />
-        </div>
-
-        <div className="resumo">
-          <div className="resumo-item"><span>Contatos do dia</span><b>{doDia.length}</b></div>
-          <div className="resumo-item"><span>Com telefone</span><b>{comTelefone}/{doDia.length}</b></div>
-          <div className="resumo-item"><span>Total adormecidos</span><b>{clientes.length}</b></div>
-          <div className="resumo-item destaque"><span>Potencial de reativação</span><b>{brl(valorDia)}</b></div>
-        </div>
-
         <button
-          className="btn btn-primary"
-          style={{ width: "100%", justifyContent: "center" }}
-          onClick={() => gerarPdfContato({ diaNome: DIAS[dia], clientes: doDia.map((x) => x.c) })}
+          type="button"
+          className="btn-toggle-filtros"
+          onClick={() => setOpcoesAbertas((v) => !v)}
         >
-          Baixar lista de contatos
+          {opcoesAbertas
+            ? "▲ Menos opções"
+            : `▾ ${DIAS[dia]} · ${porDia}/dia · ${comTelefone}/${doDia.length} com telefone`}
         </button>
+
+        <div className={"contato-opcoes-extra" + (opcoesAbertas ? " aberto" : "")}>
+          <div className="dias">
+            {DIAS.map((d, i) => (
+              <button key={d} className={"dia-btn" + (i === dia ? " on" : "")} onClick={() => setDia(i)}>
+                {d.slice(0, 3)}
+              </button>
+            ))}
+          </div>
+
+          <div className="filtro-grupo">
+            <span className="filtro-titulo">Contatos por dia: <b>{porDia}</b></span>
+            <input type="range" min="10" max="50" value={porDia} onChange={(e) => { setPorDia(+e.target.value); setDia(0); }} className="slider" />
+          </div>
+
+          <div className="resumo">
+            <div className="resumo-item"><span>Contatos do dia</span><b>{doDia.length}</b></div>
+            <div className="resumo-item"><span>Com telefone</span><b>{comTelefone}/{doDia.length}</b></div>
+            <div className="resumo-item"><span>Total adormecidos</span><b>{clientes.length}</b></div>
+            <div className="resumo-item destaque"><span>Potencial de reativação</span><b>{brl(valorDia)}</b></div>
+          </div>
+
+          <button
+            className="btn btn-primary"
+            style={{ width: "100%", justifyContent: "center" }}
+            onClick={() => gerarPdfContato({ diaNome: DIAS[dia], clientes: doDia.map((x) => x.c) })}
+          >
+            Baixar lista de contatos
+          </button>
+        </div>
       </aside>
 
       {/* lista grande de contatos */}

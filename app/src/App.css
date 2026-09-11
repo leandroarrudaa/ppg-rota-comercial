@@ -102,6 +102,11 @@ select.input { cursor: pointer; }
    lista de clientes. No desktop sempre aparecem, sem botão de alternar. */
 .btn-toggle-filtros { display: none; }
 .rota-dia-filtros-extra { display: flex; flex-direction: column; gap: 18px; }
+/* Plano de Visitas: dia/capacidade/resumo/PDF atrás do mesmo botão, mesma
+   ideia — sempre visíveis no desktop, recolhidos só no mobile. */
+.visitas-opcoes-extra { display: flex; flex-direction: column; gap: 18px; }
+/* Plano de Contato: dia/contatos-por-dia/resumo/baixar atrás do mesmo botão. */
+.contato-opcoes-extra { display: flex; flex-direction: column; gap: 18px; }
 
 .toggle {
   display: flex; align-items: center; gap: 8px; width: 100%;
@@ -451,6 +456,10 @@ select.input { cursor: pointer; }
   }
   .rota-dia-filtros-extra { display: none; }
   .rota-dia-filtros-extra.aberto { display: flex; }
+  .visitas-opcoes-extra { display: none; }
+  .visitas-opcoes-extra.aberto { display: flex; }
+  .contato-opcoes-extra { display: none; }
+  .contato-opcoes-extra.aberto { display: flex; }
 
   /* Plano da Semana: faturamento/ramo/faixa/matriz RFM recolhidos por
      padrão — sem isso, a barra de filtros sozinha empurrava a lista de
