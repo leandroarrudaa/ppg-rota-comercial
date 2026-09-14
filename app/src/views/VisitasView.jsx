@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
-import { montarPlanoSemana, otimizarRotaEstrada, motivoVisita, textoAgenda, estaNaHoraDeVisitar, DIAS } from "../lib/rota";
+import {
+  montarPlanoSemana, otimizarRotaEstrada, vizinhoMaisProximo, refinar2opt, distKm, kmTotalReta,
+  motivoVisita, textoAgenda, estaNaHoraDeVisitar, DIAS,
+} from "../lib/rota";
 import { recomendar } from "../lib/recomendacao";
 import { gerarPdfDia } from "../lib/pdf";
 import { usarRotaExterna } from "../lib/rotaSalva";
@@ -15,6 +18,18 @@ function pinNumerado(n, cor, risco) {
     html: `<div class="pin-num" style="background:${cor};${risco ? "box-shadow:0 0 0 3px #e8543f;" : ""}">${n}</div>`,
     iconSize: [26, 26],
     iconAnchor: [13, 13],
+  });
+}
+
+// Pino cinza/transparente de quem está perto da rota mas não entrou no
+// plano — só pra dar visibilidade e permitir adicionar com um toque, sem
+// competir visualmente com a numeração da rota escolhida.
+function pinFantasma() {
+  return L.divIcon({
+    className: "",
+    html: `<div class="pin-fantasma"></div>`,
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
   });
 }
 
@@ -53,12 +68,19 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   // pro toggle painel/mapa: no celular os dois espremidos juntos ficam
   // pequenos demais pra usar (lista ilegível, mapa minúsculo).
   const [opcoesAbertas, setOpcoesAbertas] = useState(false);
+  const [vizinhosAbertos, setVizinhosAbertos] = useState(false);
   const [modoMobile, setModoMobile] = useState("painel");
   // Raio de agrupamento do dia e peso da distância — configuráveis pelo
   // Admin em Ajustes (ver backend/app/services/configuracoes.py). Os
   // valores abaixo são o padrão de fábrica, usados até a config chegar (ou
   // se a busca falhar — nunca trava o plano por causa disso).
   const [config, setConfig] = useState({ raioDiaKm: 45, penalidadeKm: 3 });
+  // Ajuste manual em cima do plano automático: quem o algoritmo escolheu mas
+  // o vendedor tirou (removidosIds), e quem estava por perto e ele decidiu
+  // incluir (extras) — ver vizinhosProximos/adicionar/remover abaixo.
+  // Zerados toda vez que o plano do dia muda (ver efeito mais abaixo).
+  const [removidosIds, setRemovidosIds] = useState(() => new Set());
+  const [extras, setExtras] = useState([]);
   const mapRef = useRef(null);
   const markerRefs = useRef({});
 
@@ -103,17 +125,43 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   );
   const plano = planos[dia] || planos[0];
 
-  // Ao trocar de dia (ou de capacidade/filtro), a lista já aparece na hora
-  // com a ordem em linha reta (2-opt) — a chamada ao OSRM só melhora a
-  // ordem/distância quando responder; se falhar, fica valendo a de linha
-  // reta, que já estava na tela.
+  // Zera os ajustes manuais (quem foi tirado, quem foi adicionado) sempre
+  // que o plano do dia muda — trocar de dia, capacidade ou filtro monta um
+  // plano novo do zero; carregar ajuste de outro contexto pra ele não faz
+  // sentido.
+  useEffect(() => {
+    setRemovidosIds(new Set());
+    setExtras([]);
+  }, [plano]);
+
+  // Quem o vendedor quer visitar hoje: o plano automático, menos quem ele
+  // tirou, mais quem ele adicionou pelos pinos cinza perto da rota — ainda
+  // sem ordem nenhuma (isso é o efeito logo abaixo).
+  const stopsDesejados = useMemo(() => {
+    if (!plano) return [];
+    const mantidos = plano.clientes.filter((c) => !removidosIds.has(c.id));
+    const idsMantidos = new Set(mantidos.map((c) => c.id));
+    return [...mantidos, ...extras.filter((c) => !idsMantidos.has(c.id))];
+  }, [plano, removidosIds, extras]);
+
+  // Roda de novo toda vez que MUDA QUEM vai (dia/capacidade/filtro trocando
+  // o plano, ou um ajuste manual de adicionar/tirar) — nunca só por causa
+  // da ordem interna mudar, senão a resposta do OSRM disparava o efeito de
+  // novo e entrava em loop. A ordem em linha reta (2-opt) já aparece na
+  // hora; a chamada ao OSRM só melhora ordem/distância quando responder —
+  // se falhar, fica valendo a de linha reta, que já estava na tela.
   useEffect(() => {
     let vivo = true;
     setEstrada(null);
-    setOrdemFinal(plano ? plano.clientes : null);
-    if (!plano || plano.clientes.length < 2) return;
+    if (stopsDesejados.length < 2) {
+      setOrdemFinal(stopsDesejados);
+      return;
+    }
+    const inicio = stopsDesejados.find((c) => c.id === plano?.seed?.id) || stopsDesejados[0];
+    const ordemReta = refinar2opt(vizinhoMaisProximo(stopsDesejados, inicio));
+    setOrdemFinal(ordemReta);
     setCarregandoRota(true);
-    otimizarRotaEstrada(plano.clientes)
+    otimizarRotaEstrada(ordemReta)
       .then((r) => {
         if (!vivo || !r) return;
         setEstrada({ km: r.km, min: r.min, linha: r.linha });
@@ -122,7 +170,29 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
       .catch(() => {})
       .finally(() => vivo && setCarregandoRota(false));
     return () => { vivo = false; };
-  }, [plano]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopsDesejados]);
+
+  // Adicionar/tirar clientes da rota do dia — usado pelos pinos do mapa
+  // (fantasma = adicionar; numerado = tirar, dentro do próprio balão).
+  function adicionar(cliente) {
+    setExtras((lista) => (lista.some((c) => c.id === cliente.id) ? lista : [...lista, cliente]));
+    setRemovidosIds((s) => {
+      if (!s.has(cliente.id)) return s;
+      const novo = new Set(s);
+      novo.delete(cliente.id);
+      return novo;
+    });
+  }
+  function remover(cliente) {
+    setExtras((lista) => lista.filter((c) => c.id !== cliente.id));
+    setRemovidosIds((s) => new Set(s).add(cliente.id));
+  }
+  function desfazerAjustes() {
+    setRemovidosIds(new Set());
+    setExtras([]);
+  }
+  const temAjusteManual = removidosIds.size > 0 || extras.length > 0;
 
   if (!plano) {
     return (
@@ -146,9 +216,30 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   }
 
   const ordem = ordemFinal || plano.clientes;
-  const km = estrada ? estrada.km : plano.kmReta * 1.35;
-  const min = estrada ? estrada.min : (plano.kmReta * 1.35) / 0.6;
+  // kmReta do plano original só vale enquanto não há ajuste manual — com
+  // adição/remoção, o total tem que ser recalculado em cima da ordem atual.
+  const kmRetaAtual = temAjusteManual ? kmTotalReta(ordem) : plano.kmReta;
+  const km = estrada ? estrada.km : kmRetaAtual * 1.35;
+  const min = estrada ? estrada.min : (kmRetaAtual * 1.35) / 0.6;
   const linha = estrada ? estrada.linha : ordem.map((c) => [c.lat, c.lng]);
+  const valorRoteiro = ordem.reduce((s, c) => s + (c.fat || 0), 0);
+
+  // Quem está perto da rota de hoje mas não entrou no plano — pinos cinza
+  // no mapa, pra dar visibilidade e deixar o vendedor incluir com um toque
+  // se achar que vale a pena o desvio. Raio curto de propósito (é "já que
+  // vou passar do lado", não "monta outro dia inteiro aqui").
+  // Não é useMemo de propósito: já estamos depois do "if (!plano) return"
+  // lá em cima, e um hook chamado só às vezes quebra a regra dos hooks. O
+  // cálculo é barato (algumas dezenas de milhares de comparações de
+  // distância no pior caso) — não pesa recalcular a cada render.
+  const RAIO_VIZINHOS_KM = 6;
+  const idsNaRota = new Set(ordem.map((c) => c.id));
+  const vizinhosProximos = clientes
+    .filter((c) => c.lat != null && !idsNaRota.has(c.id))
+    .map((c) => ({ c, dist: Math.min(...ordem.map((p) => distKm(p, c))) }))
+    .filter((x) => x.dist <= RAIO_VIZINHOS_KM)
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, 40);
 
   return (
     <div className={"mapa-layout" + (modoMobile === "mapa" ? " modo-mapa-mobile" : " modo-painel-mobile")}>
@@ -173,7 +264,7 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
         >
           {opcoesAbertas
             ? "▲ Menos opções"
-            : `▾ ${DIAS[dia]} · ${capacidade}/dia · ${brl(plano.valor)}`}
+            : `▾ ${DIAS[dia]} · ${capacidade}/dia · ${brl(valorRoteiro)}`}
         </button>
 
         <div className={"visitas-opcoes-extra" + (opcoesAbertas ? " aberto" : "")}>
@@ -209,11 +300,17 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
           )}
 
           <div className="resumo">
-            <div className="resumo-item"><span>Visitas</span><b>{plano.clientes.length}</b></div>
+            <div className="resumo-item"><span>Visitas</span><b>{ordem.length}</b></div>
             <div className="resumo-item"><span>Distância</span><b>{km.toFixed(0)} km {carregandoRota && <small className="faint">…</small>}</b></div>
             <div className="resumo-item"><span>Tempo em rota</span><b>{Math.floor(min / 60)}h{String(Math.round(min % 60)).padStart(2, "0")}</b></div>
-            <div className="resumo-item destaque"><span>Faturamento do roteiro</span><b>{brl(plano.valor)}</b></div>
+            <div className="resumo-item destaque"><span>Faturamento do roteiro</span><b>{brl(valorRoteiro)}</b></div>
           </div>
+
+          {temAjusteManual && (
+            <button type="button" className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={desfazerAjustes}>
+              ↺ Desfazer ajustes manuais
+            </button>
+          )}
 
           {aoAbrirRotaDoDia && usuario && (
             <button
@@ -228,7 +325,7 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
           <button
             className="btn btn-ghost"
             style={{ width: "100%", justifyContent: "center" }}
-            onClick={() => gerarPdfDia({ diaNome: DIAS[dia], clientes: ordem, km, min, valor: plano.valor })}
+            onClick={() => gerarPdfDia({ diaNome: DIAS[dia], clientes: ordem, km, min, valor: valorRoteiro })}
           >
             Baixar PDF da rota
           </button>
@@ -258,11 +355,48 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
                       </div>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    className="rota-item-remover"
+                    title="Tirar da rota de hoje"
+                    onClick={(e) => { e.stopPropagation(); remover(c); }}
+                    disabled={ordem.length <= 1}
+                  >
+                    ×
+                  </button>
                 </li>
               );
             })}
           </ol>
         </div>
+
+        {vizinhosProximos.length > 0 && (
+          <div className="filtro-grupo">
+            <button
+              type="button"
+              className="btn-toggle-vizinhos"
+              onClick={() => setVizinhosAbertos((v) => !v)}
+            >
+              {vizinhosAbertos ? "▲ Esconder" : "▾"} Perto da rota de hoje <b>{vizinhosProximos.length}</b>
+            </button>
+            {vizinhosAbertos && (
+              <ul className="vizinhos-lista">
+                {vizinhosProximos.map(({ c, dist }) => (
+                  <li key={c.id} className="vizinho-item">
+                    <span className={"chip " + FAIXA_CHIP[c.faixa]}><span className={"dot " + FAIXA_DOT[c.faixa]} /></span>
+                    <div className="vizinho-info">
+                      <div className="vizinho-nome">{c.nome}</div>
+                      <div className="faint" style={{ fontSize: 11 }}>{brl(c.fat)} · a {dist.toFixed(1)} km da rota</div>
+                    </div>
+                    <button type="button" className="btn btn-ghost" onClick={() => adicionar(c)}>
+                      + Incluir
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </aside>
 
       <div className="mapa-wrap">
@@ -291,6 +425,39 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
                     {c.emRisco && <span className="chip chip-risk"><span className="dot dot-risk" />risco</span>}
                   </div>
                   <div className="pop-info">{brl(c.fat)} · {motivoVisita(c)}{c.cadencia ? ` · compra a cada ${c.cadencia}d` : ""}</div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ marginTop: 8, width: "100%", justifyContent: "center" }}
+                    onClick={() => remover(c)}
+                    disabled={ordem.length <= 1}
+                  >
+                    Tirar da rota
+                  </button>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+          {/* Pinos cinza: quem está perto da rota de hoje mas não entrou no
+              plano — um toque adiciona, sem precisar sair da tela. */}
+          {vizinhosProximos.map(({ c, dist }) => (
+            <Marker key={c.id} position={[c.lat, c.lng]} icon={pinFantasma()}>
+              <Popup>
+                <div className="pop">
+                  <div className="pop-nome">{c.nome}</div>
+                  <div className="pop-meta">
+                    <span className={"chip " + FAIXA_CHIP[c.faixa]}><span className={"dot " + FAIXA_DOT[c.faixa]} />{c.faixa}</span>
+                    {c.emRisco && <span className="chip chip-risk"><span className="dot dot-risk" />risco</span>}
+                  </div>
+                  <div className="pop-info">{brl(c.fat)} · a {dist.toFixed(1)} km da rota de hoje</div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ marginTop: 8, width: "100%", justifyContent: "center" }}
+                    onClick={() => adicionar(c)}
+                  >
+                    + Adicionar à rota
+                  </button>
                 </div>
               </Popup>
             </Marker>
