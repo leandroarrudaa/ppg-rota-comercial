@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 from ..models import Cliente, Configuracao
 
 FATURAMENTO_MINIMO_RISCO = "faturamento_minimo_risco"
+RAIO_DIA_KM = "raio_dia_km"
+PENALIDADE_KM = "penalidade_km"
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,8 @@ class Opcao:
     padrao: float
     minimo: float = 0
     maximo: float | None = None
+    unidade: str = "R$"
+    passo: float = 500
 
 
 # Padrão 0 = comportamento de antes (só o quintil decide). Assim ligar a
@@ -43,6 +47,41 @@ OPCOES: dict[str, Opcao] = {
         padrao=0,
         minimo=0,
         maximo=1_000_000,
+    ),
+    RAIO_DIA_KM: Opcao(
+        chave=RAIO_DIA_KM,
+        rotulo="Raio de agrupamento do dia da rota",
+        ajuda=(
+            "O Plano da Semana monta cada dia em volta de um cliente-âncora e só "
+            "considera quem está dentro deste raio dele. Menor = dias mais "
+            "compactos, mas pode sobrar cliente de fora sem entrar em rota "
+            "nenhuma se a carteira for espalhada. Maior = mais gente elegível "
+            "por dia, correndo o risco de espalhar demais."
+        ),
+        padrao=45,
+        minimo=10,
+        maximo=150,
+        unidade="km",
+        passo=5,
+    ),
+    PENALIDADE_KM: Opcao(
+        chave=PENALIDADE_KM,
+        rotulo="Peso da distância na escolha de quem visitar",
+        ajuda=(
+            "Dentro do raio do dia, o app decide quem entra comparando o valor "
+            "do cliente (Ouro/Prata/Bronze, risco, atraso) com o quanto custaria "
+            "andar até ele — este número é o quanto 1 km a mais 'pesa' nessa "
+            "conta. Com o padrão (3), a diferença entre um Ouro parado e um "
+            "Prata vale até uns 18 km de distância extra a favor do Ouro — é "
+            "por isso que às vezes ele pula um Prata do lado pra ir num Ouro "
+            "longe. Suba este número para a rota passar a priorizar quem está "
+            "perto, mesmo que valha um pouco menos."
+        ),
+        padrao=3,
+        minimo=0.5,
+        maximo=20,
+        unidade="pontos por km",
+        passo=0.5,
     ),
 }
 
@@ -74,7 +113,10 @@ def definir_numero(db: Session, chave: str, valor: float) -> float:
     """Grava o valor depois de validar contra os limites declarados."""
     opcao = _opcao(chave)
     if valor < opcao.minimo or (opcao.maximo is not None and valor > opcao.maximo):
-        limite = f"entre {opcao.minimo:,.0f} e {opcao.maximo:,.0f}".replace(",", ".")
+        # .0f arredondava limite fracionário (ex.: mínimo 0.5) para 0 na
+        # mensagem — casas decimais só quando o próprio limite tem.
+        casas = 0 if float(opcao.minimo).is_integer() else 1
+        limite = f"entre {opcao.minimo:,.{casas}f} e {opcao.maximo:,.{casas}f}".replace(",", ".")
         raise HTTPException(status_code=400, detail=f"Informe um valor {limite}.")
 
     registro = db.get(Configuracao, chave)
@@ -96,6 +138,8 @@ def listar(db: Session) -> list[dict]:
             "padrao": o.padrao,
             "minimo": o.minimo,
             "maximo": o.maximo,
+            "unidade": o.unidade,
+            "passo": o.passo,
         }
         for o in OPCOES.values()
     ]

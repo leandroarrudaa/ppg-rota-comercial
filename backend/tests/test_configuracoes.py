@@ -80,6 +80,35 @@ def test_listar_traz_rotulo_e_ajuda_para_a_tela(db):
     assert piso["valor"] == 0
 
 
+# ------------------------------------------------- raio e peso da distância
+
+def test_raio_e_penalidade_tem_padrao_de_fabrica(db):
+    """Mesmo padrão que estava fixo no código antes de virar configurável —
+    mudar isso não pode alterar o comportamento de quem nunca abriu a tela."""
+    assert svc.obter_numero(db, svc.RAIO_DIA_KM) == 45
+    assert svc.obter_numero(db, svc.PENALIDADE_KM) == 3
+
+
+def test_penalidade_aceita_valor_fracionario(db):
+    svc.definir_numero(db, svc.PENALIDADE_KM, 1.5)
+    db.commit()
+    assert svc.obter_numero(db, svc.PENALIDADE_KM) == 1.5
+
+
+def test_penalidade_fora_do_limite_mostra_a_casa_decimal_certa(db):
+    """.0f arredondava o mínimo 0.5 pra '0' na mensagem — confuso pra quem lê."""
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as erro:
+        svc.definir_numero(db, svc.PENALIDADE_KM, 0)
+    assert "entre 0.5 e 20" in erro.value.detail
+
+
+def test_listar_traz_unidade_das_novas_opcoes(db):
+    opcoes = {o["chave"]: o for o in svc.listar(db)}
+    assert opcoes[svc.RAIO_DIA_KM]["unidade"] == "km"
+    assert opcoes[svc.PENALIDADE_KM]["unidade"] == "pontos por km"
+
+
 # ------------------------------------------------- efeito na carteira
 
 def test_piso_remove_risco_de_cliente_pequeno(db):

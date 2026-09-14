@@ -896,6 +896,7 @@ th.ordenavel:hover { color: var(--ink-soft); }
 .ajuste-item { display: flex; flex-direction: column; gap: 5px; }
 .ajuste-campo { display: flex; gap: 8px; align-items: center; }
 .ajuste-campo .input { max-width: 200px; }
+.ajuste-unidade { font-size: 0.82rem; color: var(--faint); }
 
 /* ---------- agenda de visita no plano da semana ---------- */
 /* Vive dentro do painel escuro do plano, mas com fundo claro — a cor do texto

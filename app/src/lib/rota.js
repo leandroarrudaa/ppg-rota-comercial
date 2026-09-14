@@ -143,7 +143,16 @@ export function refinar2opt(ordem) {
 
 // Monta o plano da semana: 5 dias, cada um uma rota geograficamente tight,
 // ancorada num cliente de alto valor e completada por proximidade + valor.
-export function montarPlanoSemana(clientes, capacidade, dias = 5, incluirNaoVencidos = false) {
+//
+// raioDiaKm e penalidadeKm vêm dos Ajustes (configuráveis pelo Admin, ver
+// backend/app/services/configuracoes.py) — os padrões aqui só cobrem quem
+// chama sem ter carregado a configuração ainda. penalidadeKm é quem
+// realmente decide "pula o Prata do lado pra ir num Ouro mais longe": é
+// quanto 1 km a mais custa frente ao valor do cliente nessa comparação.
+export function montarPlanoSemana(
+  clientes, capacidade, dias = 5, incluirNaoVencidos = false,
+  { raioDiaKm = 45, penalidadeKm = 3 } = {}
+) {
   // Fora do plano quem foi visitado há pouco e ainda não venceu. Sem isto, o
   // mesmo cliente reaparecia toda semana, porque o cálculo só olhava faixa e
   // risco — nunca a visita que acabou de acontecer.
@@ -151,8 +160,8 @@ export function montarPlanoSemana(clientes, capacidade, dias = 5, incluirNaoVenc
     (c) => c.lat != null && (incluirNaoVencidos || estaNaHoraDeVisitar(c))
   );
   const restante = [...pool];
-  const PENALIDADE_KM = 3; // quanto a distância "custa" frente ao valor
-  const RAIO_DIA_KM = 45; // cada dia é uma rota local — sem cruzar o estado
+  const PENALIDADE_KM = penalidadeKm; // quanto a distância "custa" frente ao valor
+  const RAIO_DIA_KM = raioDiaKm; // cada dia é uma rota local — sem cruzar o estado
   const planos = [];
 
   // potencial de um dia ancorado em "seed": soma do valor dos melhores

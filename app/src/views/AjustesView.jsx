@@ -2,6 +2,15 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { brl } from "../lib/format";
 
+// "R$" tem o texto especial de piso (0 = desligado); as demais opções (km,
+// pontos por km, etc.) mostram só número + unidade — não tem "desligado".
+function formatarValorAtual(o) {
+  if (o.unidade === "R$" || !o.unidade) {
+    return o.valor > 0 ? brl(o.valor) : "sem piso (só a posição na carteira decide)";
+  }
+  return `${o.valor} ${o.unidade}`;
+}
+
 // Ajustes do negócio que o gerente muda sozinho, sem depender de publicação.
 // Cada opção é declarada no servidor (rótulo, ajuda e limites vêm de lá), então
 // esta tela não precisa saber quais existem — ela desenha o que receber.
@@ -70,10 +79,11 @@ export default function AjustesView() {
                 type="number"
                 min={o.minimo}
                 max={o.maximo ?? undefined}
-                step="500"
+                step={o.passo ?? 500}
                 value={rascunho[o.chave] ?? ""}
                 onChange={(e) => setRascunho((r) => ({ ...r, [o.chave]: e.target.value }))}
               />
+              {o.unidade && o.unidade !== "R$" && <span className="ajuste-unidade">{o.unidade}</span>}
               <button
                 className="btn btn-primary"
                 disabled={!alterado || salvando === o.chave}
@@ -83,7 +93,7 @@ export default function AjustesView() {
               </button>
             </div>
             <small className="faint">
-              Valor atual: {o.valor > 0 ? brl(o.valor) : "sem piso (só a posição na carteira decide)"}
+              Valor atual: {formatarValorAtual(o)}
             </small>
           </div>
         );

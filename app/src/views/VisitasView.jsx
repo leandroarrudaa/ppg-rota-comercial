@@ -5,6 +5,7 @@ import { montarPlanoSemana, otimizarRotaEstrada, motivoVisita, textoAgenda, esta
 import { recomendar } from "../lib/recomendacao";
 import { gerarPdfDia } from "../lib/pdf";
 import { usarRotaExterna } from "../lib/rotaSalva";
+import { api } from "../lib/api";
 import { FAIXA_COR, FAIXA_CHIP, FAIXA_DOT, brl, telefoneFmt, recenciaTexto } from "../lib/format";
 import MapAutoSize from "../components/MapAutoSize";
 
@@ -53,8 +54,25 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   // pequenos demais pra usar (lista ilegível, mapa minúsculo).
   const [opcoesAbertas, setOpcoesAbertas] = useState(false);
   const [modoMobile, setModoMobile] = useState("painel");
+  // Raio de agrupamento do dia e peso da distância — configuráveis pelo
+  // Admin em Ajustes (ver backend/app/services/configuracoes.py). Os
+  // valores abaixo são o padrão de fábrica, usados até a config chegar (ou
+  // se a busca falhar — nunca trava o plano por causa disso).
+  const [config, setConfig] = useState({ raioDiaKm: 45, penalidadeKm: 3 });
   const mapRef = useRef(null);
   const markerRefs = useRef({});
+
+  useEffect(() => {
+    api.get("/api/configuracoes")
+      .then((lista) => {
+        const porChave = Object.fromEntries(lista.map((o) => [o.chave, o.valor]));
+        setConfig({
+          raioDiaKm: porChave.raio_dia_km ?? 45,
+          penalidadeKm: porChave.penalidade_km ?? 3,
+        });
+      })
+      .catch(() => {}); // fica valendo o padrão de fábrica
+  }, []);
 
   // centraliza no pin e abre o balão (usado ao clicar no nome da lista)
   function focar(c) {
@@ -75,8 +93,8 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   }
 
   const planos = useMemo(
-    () => montarPlanoSemana(clientes, capacidade, 5, incluirNaoVencidos),
-    [clientes, capacidade, incluirNaoVencidos]
+    () => montarPlanoSemana(clientes, capacidade, 5, incluirNaoVencidos, config),
+    [clientes, capacidade, incluirNaoVencidos, config]
   );
   // quantos ficaram de fora só por terem sido visitados há pouco
   const aguardando = useMemo(
