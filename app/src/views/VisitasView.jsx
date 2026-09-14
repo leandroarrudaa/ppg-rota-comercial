@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
-import { montarPlanoSemana, rotaEstrada, motivoVisita, textoAgenda, estaNaHoraDeVisitar, DIAS } from "../lib/rota";
+import { montarPlanoSemana, otimizarRotaEstrada, motivoVisita, textoAgenda, estaNaHoraDeVisitar, DIAS } from "../lib/rota";
 import { recomendar } from "../lib/recomendacao";
 import { gerarPdfDia } from "../lib/pdf";
 import { usarRotaExterna } from "../lib/rotaSalva";
@@ -38,6 +38,12 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   // para completar um dia fraco — não para voltar ao comportamento antigo.
   const [incluirNaoVencidos, setIncluirNaoVencidos] = useState(false);
   const [estrada, setEstrada] = useState(null);
+  // Ordem final da rota: começa igual a plano.clientes (linha reta, já com
+  // 2-opt — ver montarPlanoSemana) e é substituída pela ordem de estrada
+  // real assim que o OSRM responde (ver efeito abaixo). Guardada à parte
+  // porque plano.clientes vem de um useMemo — não dá pra "corrigir" esse
+  // array depois que a resposta assíncrona chega.
+  const [ordemFinal, setOrdemFinal] = useState(null);
   const [carregandoRota, setCarregandoRota] = useState(false);
   const [aberto, setAberto] = useState(null);
   // Só importa no mobile (CSS): dia/capacidade/resumo/PDF recolhidos por
@@ -64,7 +70,7 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   // salva lá (não há perda real: visitas em andamento continuam finalizáveis
   // pela ficha do cliente, independente de qual lista está na tela).
   function usarHoje() {
-    usarRotaExterna(usuario.id, plano.clientes);
+    usarRotaExterna(usuario.id, ordemFinal || plano.clientes);
     aoAbrirRotaDoDia();
   }
 
@@ -79,14 +85,23 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   );
   const plano = planos[dia] || planos[0];
 
+  // Ao trocar de dia (ou de capacidade/filtro), a lista já aparece na hora
+  // com a ordem em linha reta (2-opt) — a chamada ao OSRM só melhora a
+  // ordem/distância quando responder; se falhar, fica valendo a de linha
+  // reta, que já estava na tela.
   useEffect(() => {
     let vivo = true;
     setEstrada(null);
+    setOrdemFinal(plano ? plano.clientes : null);
     if (!plano || plano.clientes.length < 2) return;
     setCarregandoRota(true);
-    rotaEstrada(plano.clientes)
-      .then((r) => vivo && setEstrada(r))
-      .catch(() => vivo && setEstrada(null))
+    otimizarRotaEstrada(plano.clientes)
+      .then((r) => {
+        if (!vivo || !r) return;
+        setEstrada({ km: r.km, min: r.min, linha: r.linha });
+        setOrdemFinal(r.ordem);
+      })
+      .catch(() => {})
       .finally(() => vivo && setCarregandoRota(false));
     return () => { vivo = false; };
   }, [plano]);
@@ -112,9 +127,10 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
     );
   }
 
+  const ordem = ordemFinal || plano.clientes;
   const km = estrada ? estrada.km : plano.kmReta * 1.35;
   const min = estrada ? estrada.min : (plano.kmReta * 1.35) / 0.6;
-  const linha = estrada ? estrada.linha : plano.clientes.map((c) => [c.lat, c.lng]);
+  const linha = estrada ? estrada.linha : ordem.map((c) => [c.lat, c.lng]);
 
   return (
     <div className={"mapa-layout" + (modoMobile === "mapa" ? " modo-mapa-mobile" : " modo-painel-mobile")}>
@@ -194,7 +210,7 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
           <button
             className="btn btn-ghost"
             style={{ width: "100%", justifyContent: "center" }}
-            onClick={() => gerarPdfDia({ diaNome: DIAS[dia], clientes: plano.clientes, km, min, valor: plano.valor })}
+            onClick={() => gerarPdfDia({ diaNome: DIAS[dia], clientes: ordem, km, min, valor: plano.valor })}
           >
             Baixar PDF da rota
           </button>
@@ -203,7 +219,7 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
         <div className="filtro-grupo">
           <span className="filtro-titulo">Ordem de visita <span className="faint" style={{ textTransform: "none", fontWeight: 500 }}>· toque para ver a ação</span></span>
           <ol className="rota-lista">
-            {plano.clientes.map((c, i) => {
+            {ordem.map((c, i) => {
               const rec = recomendar(c);
               const open = aberto === c.id;
               return (
@@ -235,9 +251,9 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
         <MapContainer ref={mapRef} center={[-25.095, -50.16]} zoom={12} style={{ height: "100%", width: "100%" }}>
           <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap &copy; CARTO" subdomains="abcd" />
           <MapAutoSize />
-          <FitRota pontos={plano.clientes} />
+          <FitRota pontos={ordem} />
           <Polyline positions={linha} pathOptions={{ color: "#0a0a0b", weight: 4, opacity: 0.65 }} />
-          {plano.clientes.map((c, i) => (
+          {ordem.map((c, i) => (
             <Marker
               key={c.id}
               position={[c.lat, c.lng]}

@@ -108,6 +108,39 @@ export function kmTotalReta(ordem) {
   return km;
 }
 
+// Refinamento 2-opt: destrava o zigue-zague que o vizinho-mais-próximo deixa
+// pra trás (ele decide passo a passo, sem enxergar o problema todo — sobra
+// gente espalhada pro fim e a rota cruza o próprio caminho). A cada volta,
+// testa se inverter um trecho encurta a soma das duas pontas que ele troca;
+// se encurtar, inverte, e repete até não achar mais melhoria (ou um teto de
+// voltas, pra não travar em listas grandes). Mantém o primeiro ponto fixo —
+// é o início escolhido por quem chamou (seed do dia, ou o primeiro
+// selecionado na Rota do Dia) — e é rota aberta: não fecha ciclo de volta
+// pro começo.
+export function refinar2opt(ordem) {
+  const n = ordem.length;
+  if (n < 4) return ordem;
+  let rota = [...ordem];
+  let melhorou = true;
+  let voltas = 0;
+  while (melhorou && voltas < 30) {
+    melhorou = false;
+    voltas++;
+    for (let i = 1; i < n - 1; i++) {
+      for (let k = i; k < n - 1; k++) {
+        const a = rota[i - 1], b = rota[i], c = rota[k], d = rota[k + 1];
+        const atual = distKm(a, b) + distKm(c, d);
+        const trocado = distKm(a, c) + distKm(b, d);
+        if (trocado < atual - 1e-6) {
+          rota = [...rota.slice(0, i), ...rota.slice(i, k + 1).reverse(), ...rota.slice(k + 1)];
+          melhorou = true;
+        }
+      }
+    }
+  }
+  return rota;
+}
+
 // Monta o plano da semana: 5 dias, cada um uma rota geograficamente tight,
 // ancorada num cliente de alto valor e completada por proximidade + valor.
 export function montarPlanoSemana(clientes, capacidade, dias = 5, incluirNaoVencidos = false) {
@@ -161,8 +194,11 @@ export function montarPlanoSemana(clientes, capacidade, dias = 5, incluirNaoVenc
       if (i >= 0) restante.splice(i, 1);
     }
 
-    // 5) ordem ótima (vizinho mais próximo a partir da semente)
-    const ordem = vizinhoMaisProximo(escolhidos, seed);
+    // 5) ordem: vizinho mais próximo a partir da semente, depois 2-opt pra
+    // desfazer os cruzamentos que o vizinho-mais-próximo sozinho deixa —
+    // isto ainda é linha reta; a ordem final "de estrada" (OSRM /trip) vem
+    // depois, de forma assíncrona (ver otimizarRotaEstrada).
+    const ordem = refinar2opt(vizinhoMaisProximo(escolhidos, seed));
 
     planos.push({
       dia: d,
@@ -175,20 +211,44 @@ export function montarPlanoSemana(clientes, capacidade, dias = 5, incluirNaoVenc
   return planos;
 }
 
-// Rota de estrada real via OSRM (gratuito). Mantém a ordem dada.
-export async function rotaEstrada(ordem) {
-  if (ordem.length < 2) return null;
-  const coords = ordem.map((c) => `${c.lng},${c.lat}`).join(";");
-  const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+// Reordena os pontos pela rota de estrada mais curta DE VERDADE — usa o
+// serviço "trip" do OSRM (mesmo servidor gratuito de antes), que resolve a
+// melhor sequência considerando a malha viária real (mão única, rio,
+// rodovia), em vez da linha reta que vizinhoMaisProximo/refinar2opt usam.
+// É por isso que substitui o antigo rotaEstrada, que só desenhava o
+// caminho sem nunca mudar a ordem calculada em linha reta.
+//
+// Mantém o primeiro ponto como início — é o combinado (seed do dia no
+// Plano da Semana, ou o primeiro cliente selecionado na Rota do Dia) — e
+// não fecha ciclo: não precisa voltar pro início, só terminar no ponto que
+// render a rota mais curta.
+//
+// Quem chama trata a falha (rede fora, serviço gratuito fora do ar): a
+// ordem em linha reta (vizinhoMaisProximo + refinar2opt), calculada na
+// hora sem depender de rede, já fica na tela antes desta função responder,
+// e continua valendo se ela falhar.
+export async function otimizarRotaEstrada(pontos) {
+  if (pontos.length < 2) return null;
+  const coords = pontos.map((c) => `${c.lng},${c.lat}`).join(";");
+  const url =
+    "https://router.project-osrm.org/trip/v1/driving/" + coords +
+    "?source=first&roundtrip=false&geometries=geojson&overview=full";
   const r = await fetch(url);
   if (!r.ok) throw new Error("OSRM " + r.status);
   const j = await r.json();
-  const rota = j.routes?.[0];
-  if (!rota) return null;
+  const trip = j.trips?.[0];
+  if (!trip || !j.waypoints) return null;
+  // waypoint_index = posição de cada ponto de entrada na rota otimizada —
+  // remonta a ordem final a partir disso.
+  const ordem = j.waypoints
+    .map((w, i) => [w.waypoint_index, pontos[i]])
+    .sort((a, b) => a[0] - b[0])
+    .map(([, ponto]) => ponto);
   return {
-    km: rota.distance / 1000,
-    min: rota.duration / 60,
-    linha: rota.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+    ordem,
+    km: trip.distance / 1000,
+    min: trip.duration / 60,
+    linha: trip.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
   };
 }
 

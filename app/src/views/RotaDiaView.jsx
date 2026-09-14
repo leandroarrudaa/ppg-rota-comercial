@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { api } from "../lib/api";
-import { valorEstrategico, vizinhoMaisProximo, rotaEstrada, motivoVisita } from "../lib/rota";
+import { valorEstrategico, vizinhoMaisProximo, refinar2opt, otimizarRotaEstrada, motivoVisita } from "../lib/rota";
 import { FAIXAS, FAIXA_COR, FAIXA_CHIP, FAIXA_DOT, brl, num, telefoneFmt } from "../lib/format";
 import { carregarRota, salvarRota, limparRota } from "../lib/rotaSalva";
 import MapAutoSize from "../components/MapAutoSize";
@@ -273,7 +273,11 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
   function gerarRota() {
     const escolhidos = [...selecionados].map((id) => conhecidos.get(id)).filter(Boolean);
     if (escolhidos.length === 0) return;
-    const ordem = escolhidos.length > 1 ? vizinhoMaisProximo(escolhidos, escolhidos[0]) : escolhidos;
+    // Vizinho mais próximo a partir do primeiro selecionado — o início é de
+    // propósito o primeiro clique, não o mais "lógico" geograficamente — e
+    // 2-opt pra desfazer o zigue-zague que ele sozinho deixa. Ainda linha
+    // reta; a ordem de estrada de verdade vem do efeito abaixo, assíncrona.
+    const ordem = escolhidos.length > 1 ? refinar2opt(vizinhoMaisProximo(escolhidos, escolhidos[0])) : escolhidos;
     setModo("rota");
     // a rota de estrada real (OSRM) é buscada pelo efeito abaixo, não aqui —
     // o mesmo efeito também cobre quem chega em modo "rota" já pronto (rota
@@ -282,15 +286,21 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
     setRota({ ordem, estrada: null });
   }
 
-  // Busca a rota de estrada real sempre que há uma ordem definida mas ainda
-  // sem estrada calculada. Roda de novo só se a ordem mudar (não fica
-  // repetindo a cada render) e nunca sobrescreve uma estrada já resolvida.
+  // Busca a ordem otimizada por estrada real sempre que há uma ordem
+  // definida mas ainda sem estrada calculada. Roda de novo só se a ordem
+  // mudar (não fica repetindo a cada render) e nunca sobrescreve uma
+  // estrada já resolvida. Se o OSRM falhar (rede fora, serviço gratuito
+  // indisponível), fica valendo a ordem em linha reta (vizinho mais
+  // próximo + 2-opt) que já estava na tela — nunca trava sem rota nenhuma.
   useEffect(() => {
     if (modo !== "rota" || !rota || rota.estrada || rota.ordem.length < 2) return;
     let vivo = true;
     setCarregandoRota(true);
-    rotaEstrada(rota.ordem)
-      .then((estrada) => { if (vivo) setRota((r) => (r ? { ...r, estrada } : r)); })
+    otimizarRotaEstrada(rota.ordem)
+      .then((r) => {
+        if (!vivo || !r) return;
+        setRota({ ordem: r.ordem, estrada: { km: r.km, min: r.min, linha: r.linha } });
+      })
       .catch(() => {})
       .finally(() => { if (vivo) setCarregandoRota(false); });
     return () => { vivo = false; };
