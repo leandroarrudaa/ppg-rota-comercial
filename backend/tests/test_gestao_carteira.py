@@ -48,6 +48,23 @@ def test_mostra_quem_nao_tem_coordenada(db):
     assert all(c.nome != "Sem Localizacao LTDA" for c in svc.listar(db))
 
 
+def test_mostra_quem_tem_localizacao_aproximada(db):
+    """geo_status='cidade' = endereço não achado, caiu no centro da cidade —
+    tem coordenada (não é sem_localizacao) mas é falsa. Esta tela é onde o
+    gerente acha e corrige."""
+    db.add(Cliente(nome="Local Aproximado LTDA", cnpj="88.888.888/0001-88",
+                   origem=OrigemCliente.ANTIGO, status=StatusCliente.ATIVO,
+                   lat=-25.09, lng=-50.16, geo_status="cidade"))
+    db.add(Cliente(nome="Local Preciso LTDA", cnpj="99.999.999/0001-99",
+                   origem=OrigemCliente.ANTIGO, status=StatusCliente.ATIVO,
+                   lat=-25.10, lng=-50.17, geo_status="preciso"))
+    db.commit()
+
+    registros, total = svc.listar_admin(db, localizacao_aproximada=True)
+    assert total == 1
+    assert registros[0].nome == "Local Aproximado LTDA"
+
+
 def test_busca_por_nome_cnpj_ou_cidade(db):
     por_nome, _ = svc.listar_admin(db, busca="Ouro")
     por_cnpj, _ = svc.listar_admin(db, busca="22.222")

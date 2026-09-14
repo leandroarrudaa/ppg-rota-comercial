@@ -235,7 +235,11 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
   const RAIO_VIZINHOS_KM = 6;
   const idsNaRota = new Set(ordem.map((c) => c.id));
   const vizinhosProximos = clientes
-    .filter((c) => c.lat != null && !idsNaRota.has(c.id))
+    // geo=="cidade" = geocodificador caiu no centro da cidade (endereço não
+    // achado); mostrar esses como "perto da rota" seria mentira — todos
+    // caem no mesmo ponto, não estão perto de nada de verdade (ver
+    // montarPlanoSemana em lib/rota.js, mesmo motivo).
+    .filter((c) => c.lat != null && c.geo !== "cidade" && !idsNaRota.has(c.id))
     .map((c) => ({ c, dist: Math.min(...ordem.map((p) => distKm(p, c))) }))
     .filter((x) => x.dist <= RAIO_VIZINHOS_KM)
     .sort((a, b) => a.dist - b.dist)

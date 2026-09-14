@@ -24,6 +24,7 @@ const FILTROS_INICIAIS = {
   origem: "",
   status: "ativo",
   semLocalizacao: false,
+  localizacaoAproximada: false,
   vinculo: "",
   ordenar: "faturamento",
   direcao: "desc",
@@ -104,6 +105,7 @@ export default function CarteiraAdminView() {
     if (filtros.origem) params.set("origem", filtros.origem);
     if (filtros.vinculo) params.set("vinculo", filtros.vinculo);
     if (filtros.semLocalizacao) params.set("semLocalizacao", "true");
+    if (filtros.localizacaoAproximada) params.set("localizacaoAproximada", "true");
 
     api.get(`/api/clientes/admin?${params}`)
       .then(setDados)
@@ -267,6 +269,15 @@ export default function CarteiraAdminView() {
           Só sem localização no mapa
         </label>
 
+        <label className="carteira-check" title="Endereço não achado — o geocodificador caiu no centro da cidade, não no endereço real. Fica de fora do Plano da Semana até corrigir.">
+          <input
+            type="checkbox"
+            checked={filtros.localizacaoAproximada}
+            onChange={(e) => mudarFiltro("localizacaoAproximada", e.target.checked)}
+          />
+          Só localização aproximada (não achou o endereço)
+        </label>
+
         <button className="btn btn-ghost" onClick={() => { setFiltros(FILTROS_INICIAIS); setPagina(1); }}>
           Limpar filtros
         </button>
@@ -279,6 +290,7 @@ export default function CarteiraAdminView() {
         <span className="muted" style={{ fontSize: 13 }}>
           {carregando ? "Carregando…" : `${total.toLocaleString("pt-BR")} ${total === 1 ? "cliente" : "clientes"}`}
           {filtros.semLocalizacao && !carregando && " sem localização — precisam de um pino no mapa"}
+          {filtros.localizacaoAproximada && !carregando && " com localização aproximada — fora do Plano da Semana até corrigir o endereço"}
         </span>
 
         {selecionados.size > 0 && (
@@ -396,6 +408,11 @@ export default function CarteiraAdminView() {
                     )}
                     {c.clienteMestreId && <span className="chip chip-motivo">Vinculado</span>}
                     {(c.lat == null || c.lng == null) && <span className="chip chip-risk">Sem local</span>}
+                    {c.geo === "cidade" && (
+                      <span className="chip chip-motivo" title="Endereço não achado — caiu no centro da cidade. Fora do Plano da Semana até corrigir.">
+                        Local aproximado
+                      </span>
+                    )}
                   </div>
                 </td>
               </tr>

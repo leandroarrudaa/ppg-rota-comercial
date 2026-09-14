@@ -79,6 +79,10 @@ def listar_admin(
     status: str | None = Query(default="ativo", description="ativo | inativo | todos"),
     aceitaVisita: bool | None = None,
     semLocalizacao: bool = False,
+    localizacaoAproximada: bool = Query(
+        default=False,
+        description="Só geo_status=='cidade' — endereço não achado, caiu no centro da cidade (ver rota.js).",
+    ),
     vinculo: str | None = Query(default=None, description="com | sem"),
     ordenar: str = "faturamento",
     direcao: str = Query(default="desc", pattern="^(asc|desc)$"),
@@ -91,7 +95,8 @@ def listar_admin(
     coordenada, ao contrário da listagem que alimenta o mapa e a rota."""
     registros, total = svc.listar_admin(
         db, busca=busca, faixa=faixa, cidade=cidade, origem=origem, status=status,
-        aceita_visita=aceitaVisita, sem_localizacao=semLocalizacao, vinculo=vinculo,
+        aceita_visita=aceitaVisita, sem_localizacao=semLocalizacao,
+        localizacao_aproximada=localizacaoAproximada, vinculo=vinculo,
         ordenar=ordenar, direcao=direcao, pagina=pagina, tamanho=tamanho,
     )
     pendentes = visitas_svc.ids_com_promessa_pendente(db, [c.id for c in registros])

@@ -166,6 +166,7 @@ def listar_admin(
     status: str | None = None,      # ativo | inativo | todos
     aceita_visita: bool | None = None,
     sem_localizacao: bool = False,
+    localizacao_aproximada: bool = False,
     vinculo: str | None = None,     # com | sem
     ordenar: str = "faturamento",
     direcao: str = "desc",
@@ -210,6 +211,14 @@ def listar_admin(
         # quem não tem coordenada não aparece no mapa nem entra em rota:
         # é a fila de trabalho de quem precisa marcar o pino
         q = q.filter(or_(Cliente.lat.is_(None), Cliente.lng.is_(None)))
+    if localizacao_aproximada:
+        # geo_status "cidade" = o geocodificador não achou rua nem CEP e
+        # caiu no centro da cidade — tem pino, mas ele é falso, e todo
+        # cliente nessa situação cai no MESMO ponto (ver scripts/
+        # 02_geocodificar.py). Fica de fora do Plano da Semana de propósito
+        # (rota.js) até o endereço ser corrigido ou o cliente ser repinado
+        # manualmente — esta é a fila de quem precisa disso.
+        q = q.filter(Cliente.geo_status == "cidade")
     if vinculo == "com":
         q = q.filter(Cliente.cliente_mestre_id.isnot(None))
     elif vinculo == "sem":

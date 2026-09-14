@@ -156,8 +156,16 @@ export function montarPlanoSemana(
   // Fora do plano quem foi visitado há pouco e ainda não venceu. Sem isto, o
   // mesmo cliente reaparecia toda semana, porque o cálculo só olhava faixa e
   // risco — nunca a visita que acabou de acontecer.
+  //
+  // Também fora quem geo=="cidade": o geocodificador não achou nem a rua nem
+  // o CEP e caiu no centro da cidade (ver scripts/02_geocodificar.py) — todo
+  // mundo nessa situação cai EXATAMENTE no mesmo ponto. Pro algoritmo isso
+  // parece uma região densíssima (dezenas de clientes a 0km um do outro) e
+  // ele monta o dia inteiro em cima desse espelhismo, sem visitar endereço
+  // real nenhum. geo=="cep" fica: cada CEP tem coordenada própria, não
+  // empilha todo mundo no mesmo ponto — é impreciso, mas não é fantasma.
   const pool = clientes.filter(
-    (c) => c.lat != null && (incluirNaoVencidos || estaNaHoraDeVisitar(c))
+    (c) => c.lat != null && c.geo !== "cidade" && (incluirNaoVencidos || estaNaHoraDeVisitar(c))
   );
   const restante = [...pool];
   const PENALIDADE_KM = penalidadeKm; // quanto a distância "custa" frente ao valor
