@@ -14,6 +14,7 @@ const PlanoView = lazy(() => import("./views/PlanoView"));
 const RotaDiaView = lazy(() => import("./views/RotaDiaView"));
 const RelatoriosView = lazy(() => import("./views/RelatoriosView"));
 const GestaoView = lazy(() => import("./views/GestaoView"));
+const ProspeccaoView = lazy(() => import("./views/ProspeccaoView"));
 const UsuariosView = lazy(() => import("./views/UsuariosView"));
 const RelatorioVisita = lazy(() => import("./views/RelatorioVisita"));
 
@@ -110,7 +111,7 @@ export default function App() {
 
   if (!usuario) return <LoginView aoEntrar={setUsuario} />;
 
-  const abas = usuario.papel === "admin" ? [...ABAS_BASE, "Gestão", "Usuários"] : ABAS_BASE;
+  const abas = usuario.papel === "admin" ? [...ABAS_BASE, "Prospecção", "Gestão", "Usuários"] : ABAS_BASE;
 
   return (
     <div className="app">
@@ -231,6 +232,8 @@ export default function App() {
           />
         ) : aba === "Relatórios" ? (
           <RelatoriosView usuario={usuario} />
+        ) : aba === "Prospecção" ? (
+          <ProspeccaoView />
         ) : aba === "Gestão" ? (
           <GestaoView />
         ) : aba === "Usuários" ? (

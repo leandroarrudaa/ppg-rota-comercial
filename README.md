@@ -14,6 +14,8 @@ quem são os melhores, e qual a rota/contato do dia.
 - **Rota do Dia** — seleção dos clientes da região, rota de estrada real (OSRM), e o fluxo de campo:
   abrir visita, finalizar, preencher o relatório (bloqueante) e registrar promessas.
 - **Relatórios** — o que o time fez, por período e por vendedor.
+- **Prospecção** (admin) — importa uma lista de empresas que ainda não são clientes e mostra o que
+  sobra por ramo e cidade, para decidir onde vale visitar.
 - **Gestão** (admin) — lista completa da carteira, vínculo de CNPJs da mesma empresa, inativação,
   importação de dados e ajustes das regras do negócio.
 
@@ -99,6 +101,27 @@ backend/
   tests/                  # pytest
 scripts/                  # pipeline original da planilha (histórico)
 ```
+
+## Prospecção: lista de empresas novas
+
+A aba **Prospecção** (só Admin) guarda empresas que ainda **não são clientes**, vindas de uma
+planilha de CNPJs (por exemplo, a extração da Receita por DDD). Fica numa tabela própria
+(`prospectos`), separada da carteira: não entra no mapa nem na rota do dia.
+
+- **Importar:** botão "Importar lista" na aba. Aceita `.xlsx` ou `.csv`, uma empresa por linha, com
+  cabeçalho. Só `cnpj` e `razao_social` são obrigatórios; capital, porte, CNAE, endereço, telefone,
+  e-mail e município são aproveitados quando existem. Como na carteira, primeiro mostra a **prévia**
+  ("o que vai entrar") e só grava depois de confirmar.
+- **Reimportar** o mesmo CNPJ atualiza os dados da lista e **nunca apaga** o que a equipe decidiu
+  (status, motivo de descarte, observação).
+- **Quem já é cliente** é reconhecido pelo CNPJ e some da lista de visita (a marca é refeita a cada
+  importação).
+- **Ramo** vem do código CNAE (`backend/app/services/ramos.py`), nos mesmos grupos usados na análise
+  dos clientes ouro. **MEI / autônomo** é identificado pelo nome (CPF escrito no nome, ou nome de
+  pessoa sem forma jurídica) — é uma heurística, não a natureza jurídica oficial.
+- **Cidade:** a lista começa filtrada em Ponta Grossa e tem seletor de cidade.
+- A situação que aparece ("ATIVA") vem do arquivo, que é uma foto antiga. A conferência na Receita
+  ainda é uma etapa à parte (ver abaixo).
 
 ## Prospecção: situação cadastral dos CNPJs
 

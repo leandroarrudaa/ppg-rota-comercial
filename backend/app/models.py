@@ -352,3 +352,57 @@ class ImportacaoCarteira(Base):
     criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
     usuario: Mapped["Usuario | None"] = relationship()
+
+
+class StatusProspecto(str, enum.Enum):
+    """Decisão da equipe sobre a empresa da lista de prospecção."""
+    NOVO = "novo"
+    VALE_VISITA = "vale_visita"
+    DESCARTADO = "descartado"
+
+
+class Prospecto(Base):
+    """Empresa que ainda NÃO é cliente, vinda de uma lista importada (ex.: a
+    extração da Receita por DDD que o Raphael envia).
+
+    Fica separada de `clientes` de propósito: prospecto não tem RFM, não entra
+    no mapa da carteira nem na rota do dia, e a lista tem dezenas de milhares
+    de linhas, muitas de empresas que já fecharam.
+
+    Os campos da primeira parte vêm da lista e são atualizados a cada nova
+    importação do mesmo CNPJ. Os "donos do app" (status, motivo, observação)
+    nunca são sobrescritos por uma reimportação.
+    """
+    __tablename__ = "prospectos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cnpj: Mapped[str] = mapped_column(String(14), unique=True, index=True)  # só dígitos
+
+    # ------- vindo da lista (atualizado a cada importação) -------
+    razao_social: Mapped[str] = mapped_column(String(200))
+    capital_social: Mapped[float | None] = mapped_column(Float)
+    porte: Mapped[str | None] = mapped_column(String(20))  # Micro | Pequena | Demais | Sem dado
+    situacao_lista: Mapped[str | None] = mapped_column(String(30))  # situação NO ARQUIVO (foto antiga)
+    cnae_codigo: Mapped[str | None] = mapped_column(String(7))
+    ramo: Mapped[str | None] = mapped_column(String(60), index=True)
+    tipo: Mapped[str | None] = mapped_column(String(20))  # empresa | mei_autonomo
+    logradouro: Mapped[str | None] = mapped_column(String(200))
+    numero: Mapped[str | None] = mapped_column(String(20))
+    bairro: Mapped[str | None] = mapped_column(String(100))
+    cep: Mapped[str | None] = mapped_column(String(10))
+    cidade: Mapped[str | None] = mapped_column(String(100), index=True)
+    uf: Mapped[str | None] = mapped_column(String(2))
+    telefone: Mapped[str | None] = mapped_column(String(30))
+    email: Mapped[str | None] = mapped_column(String(150))
+    ja_cliente: Mapped[bool] = mapped_column(Boolean, default=False)
+    lote: Mapped[str | None] = mapped_column(String(255))  # nome do arquivo da última importação
+
+    # ------- donos do app (nunca sobrescritos na reimportação) -------
+    status: Mapped[StatusProspecto] = mapped_column(Enum(StatusProspecto), default=StatusProspecto.NOVO)
+    motivo_descarte: Mapped[str | None] = mapped_column(String(200))
+    observacao: Mapped[str | None] = mapped_column(Text)
+
+    criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
