@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from sqlalchemy import Integer, case, cast, func, or_
+from sqlalchemy import Integer, case, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from ..models import Cliente, Prospecto, StatusProspecto
@@ -124,10 +124,25 @@ def _atualizar_ja_clientes(db: Session, clientes: set[str]) -> None:
 
 # ------------------------------------------------------------------ consulta
 
+def _cnpjs_clientes_sql():
+    """Subconsulta com o CNPJ (só dígitos) de TODO cliente do cadastro, ativo ou
+    inativo — o cadastro guarda formatado ("11.111.111/0001-11")."""
+    limpo = func.replace(func.replace(func.replace(Cliente.cnpj, ".", ""), "/", ""), "-", "")
+    return select(limpo).where(Cliente.cnpj.isnot(None))
+
+
 def _base(db: Session, cidade: str | None, incluir_clientes: bool = False):
-    q = db.query(Prospecto)
+    """Prospectos que valem ser mostrados.
+
+    Fora, sempre: quem é cliente (inclusive o inativo — empresa que fechou não é
+    alvo de prospecção) e o que a equipe descartou. A checagem é feita AGORA,
+    contra o cadastro, e não pela marca `ja_cliente` gravada na importação:
+    quem foi cadastrado ou inativado depois da importação sai da lista na hora,
+    sem esperar uma nova importação.
+    """
+    q = db.query(Prospecto).filter(Prospecto.status != StatusProspecto.DESCARTADO)
     if not incluir_clientes:
-        q = q.filter(Prospecto.ja_cliente.is_(False))
+        q = q.filter(Prospecto.cnpj.not_in(_cnpjs_clientes_sql()))
     if cidade:
         q = q.filter(Prospecto.cidade == cidade.strip().upper())
     return q
@@ -138,12 +153,15 @@ def resumo(db: Session, cidade: str | None = None) -> dict:
     tirar quem já é cliente. Filtrar por cidade vale para tudo, menos para a
     lista de cidades (senão não dá para trocar de cidade)."""
     total_lista = db.query(func.count(Prospecto.id)).scalar() or 0
-    ja_clientes = db.query(func.count(Prospecto.id)).filter(Prospecto.ja_cliente.is_(True)).scalar() or 0
+    ja_clientes = (
+        db.query(func.count(Prospecto.id)).filter(Prospecto.cnpj.in_(_cnpjs_clientes_sql())).scalar() or 0
+    )
 
     cidades = [
         {"cidade": c or "sem cidade", "total": n}
         for c, n in db.query(Prospecto.cidade, func.count(Prospecto.id))
-        .filter(Prospecto.ja_cliente.is_(False))
+        .filter(Prospecto.status != StatusProspecto.DESCARTADO)
+        .filter(Prospecto.cnpj.not_in(_cnpjs_clientes_sql()))
         .group_by(Prospecto.cidade).order_by(func.count(Prospecto.id).desc())
     ]
 

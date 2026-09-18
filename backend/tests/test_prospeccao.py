@@ -8,7 +8,7 @@ import io
 import pytest
 from openpyxl import Workbook
 
-from app.models import Cliente, OrigemCliente, Prospecto, StatusProspecto
+from app.models import Cliente, OrigemCliente, Prospecto, StatusCliente, StatusProspecto
 from app.services import prospeccao as svc
 from app.services.fontes import lista_prospectos as lp
 from app.services.ramos import (
@@ -275,6 +275,40 @@ def test_resumo_por_ramo_na_cidade(cliente_http, token, com_lista):
     obras = next(x for x in r["ramos"] if x["ramo"] == "Construção civil / obras")
     assert obras["total"] == 2 and obras["empresas"] == 1 and obras["demais"] == 1
     assert {c["cidade"] for c in r["cidades"]} == {"PONTA GROSSA", "CURITIBA"}
+
+
+# ------------------------------------------------------------------ inativas não aparecem
+
+def test_cliente_inativo_nunca_aparece_como_prospecto(cliente_http, token, db):
+    """Empresa que fechou (cliente marcado como inativo) não é alvo de prospecção."""
+    # "Empresa Fechada LTDA" é cliente INATIVO no conftest (33.333.333/0001-33)
+    lista = [_linha("33333333000133", "Empresa Fechada LTDA"), _linha("60000000000106", "Empresa Viva LTDA")]
+    _enviar(cliente_http, token, _xlsx(lista), confirmar=True)
+    r = cliente_http.get("/api/prospectos", headers=_auth(token)).json()
+    assert [i["razaoSocial"] for i in r["itens"]] == ["Empresa Viva LTDA"]
+
+
+def test_inativar_cliente_depois_da_importacao_tira_da_lista_na_hora(cliente_http, token, db):
+    """A checagem é feita ao vivo: nem precisa importar a lista de novo."""
+    _enviar(cliente_http, token, _xlsx([_linha("60000000000106", "Empresa Viva LTDA")]), confirmar=True)
+    assert cliente_http.get("/api/prospectos", headers=_auth(token)).json()["total"] == 1
+
+    db.add(Cliente(cnpj="60.000.000/0001-06", nome="Empresa Viva LTDA", origem=OrigemCliente.ANTIGO,
+                   status=StatusCliente.INATIVO))
+    db.commit()
+    assert cliente_http.get("/api/prospectos", headers=_auth(token)).json()["total"] == 0
+    resumo = cliente_http.get("/api/prospectos/resumo", headers=_auth(token)).json()
+    assert resumo["naCidade"] == 0 and resumo["jaClientes"] == 1
+
+
+def test_prospecto_descartado_nao_aparece(cliente_http, token, db):
+    _enviar(cliente_http, token, _xlsx(LISTA), confirmar=True)
+    db.query(Prospecto).filter_by(cnpj="20000000000102").update({"status": StatusProspecto.DESCARTADO})
+    db.commit()
+    r = cliente_http.get("/api/prospectos", headers=_auth(token)).json()
+    assert "20000000000102" not in {i["cnpj"] for i in r["itens"]}
+    resumo = cliente_http.get("/api/prospectos/resumo?cidade=PONTA GROSSA", headers=_auth(token)).json()
+    assert resumo["naCidade"] == 2  # Alfa e o MEI; a Beta foi descartada
 
 
 # ------------------------------------------------------------------ acesso
