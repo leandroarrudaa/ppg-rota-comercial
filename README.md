@@ -100,6 +100,22 @@ backend/
 scripts/                  # pipeline original da planilha (histórico)
 ```
 
+## Prospecção: situação cadastral dos CNPJs
+
+Para saber quais empresas ainda estão ativas (e quem decide a compra), o script
+`scripts/05_consultar_situacao_cnpj.py` consulta a BrasilAPI para cada CNPJ da carteira
+e guarda em `saida/situacao_cache.json`: situação (ativa, baixada, inapta, suspensa),
+endereço atual na Receita, natureza jurídica, MEI, sócios e CNAEs secundários.
+
+```bash
+python scripts/05_consultar_situacao_cnpj.py            # consulta só quem falta (retomável)
+python scripts/05_consultar_situacao_cnpj.py --refazer  # tenta de novo os que deram erro
+```
+
+Só lê o banco do app, nunca grava nele. Leva uns 15 minutos para toda a carteira.
+O cache e as planilhas de revisão (`saida/situacao_cache.json`, `saida/candidatas_*.xlsx`)
+têm nomes de sócios e **não são commitados** (estão no `.gitignore`).
+
 ## ⚠️ Dados sensíveis
 
 A base contém **dados reais de clientes** (empresas, CNPJs, telefones, faturamento).

@@ -39,3 +39,8 @@ clientes_sem_endereco.csv
 
 # preferencias locais da ferramenta, por maquina
 .claude/settings.local.json
+
+# consulta de CNPJ (sócios = dados de pessoa física) e planilhas de revisão
+saida/situacao_cache.json
+saida/situacao_cache.json.tmp
+saida/candidatas_*.xlsx
