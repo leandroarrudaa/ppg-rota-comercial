@@ -974,3 +974,13 @@ th.ordenavel:hover { color: var(--ink-soft); }
   color: var(--faint);
   margin-top: 1px;
 }
+
+/* nota de potencial ouro */
+.chip-potencial {
+  background: #efe9ff;
+  color: #4b34b0;
+  border: 1px solid #d5c9ff;
+  margin-left: 4px;
+  font-weight: 600;
+}
+.filtro-potencial .subtabs { flex-wrap: wrap; }

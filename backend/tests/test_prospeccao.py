@@ -423,6 +423,104 @@ def test_resposta_da_brasilapi_vira_situacao_e_socios(monkeypatch):
         cr._consultar("10000000000101")
 
 
+# ------------------------------------------------------------------ nota de potencial
+
+def test_lista_traz_nota_e_ordena_e_filtra_por_ela(cliente_http, token, com_lista):
+    r = cliente_http.get("/api/prospectos?tipo=empresa&ordenar=notaPotencial&direcao=desc", headers=_auth(token)).json()
+    notas = [i["notaPotencial"] for i in r["itens"]]
+    assert notas == sorted(notas, reverse=True) and notas[0] > notas[-1]
+    assert r["itens"][0]["potencialDetalhe"].startswith("Ramo ")
+    # Alfa: construção (35) + estrutura alta (25) + capital 800 mil (20) = 80/80 -> 100
+    assert r["itens"][0]["razaoSocial"] == "Construtora Alfa LTDA" and notas[0] == 100
+
+    so_boas = cliente_http.get("/api/prospectos?notaMin=90", headers=_auth(token)).json()
+    assert [i["razaoSocial"] for i in so_boas["itens"]] == ["Construtora Alfa LTDA"]
+
+
+# ------------------------------------------------------------------ levar para a carteira
+
+def _ids(cliente_http, token, **filtros):
+    return [i["id"] for i in cliente_http.get("/api/prospectos?" + "&".join(f"{k}={v}" for k, v in filtros.items()),
+                                              headers=_auth(token)).json()["itens"]]
+
+
+def test_levar_para_carteira_cria_cliente_novo_com_os_dados(cliente_http, token, com_lista, receita, db):
+    receita.respostas["10000000000101"] = {"situacao": "ATIVA", "socios": "MARIA SOUZA; JOSE LIMA"}
+    _conferir(cliente_http, token, cidade="PONTA GROSSA", tipo="empresa")
+    ids = _ids(cliente_http, token, busca="Alfa")
+    r = cliente_http.post("/api/prospectos/levar-para-carteira", json={"ids": ids}, headers=_auth(token))
+    assert r.status_code == 200 and r.json()["criados"] == 1
+
+    c = db.query(Cliente).filter_by(cnpj="10.000.000/0001-01").one()
+    assert c.origem == OrigemCliente.NOVO and c.status == StatusCliente.ATIVO and c.aceita_visita is True
+    assert c.ramo == "Construção civil / obras" and c.capital_social == 800000 and c.porte == "Demais"
+    assert c.contato_nome == "MARIA SOUZA"       # o sócio vira o contato: quem decide a compra
+    assert c.endereco == "RUA DAS FLORES, 10" and c.lat is None and c.geo_status is None
+
+    # e some da Prospecção (agora é cliente)
+    assert "Construtora Alfa LTDA" not in {i["razaoSocial"] for i in
+                                            cliente_http.get("/api/prospectos", headers=_auth(token)).json()["itens"]}
+
+
+def test_levar_nao_cria_duplicata(cliente_http, token, com_lista, db):
+    ids = _ids(cliente_http, token, busca="Alfa")
+    cliente_http.post("/api/prospectos/levar-para-carteira", json={"ids": ids}, headers=_auth(token))
+    cliente_http.post("/api/prospectos/levar-para-carteira", json={"ids": ids}, headers=_auth(token))
+    assert db.query(Cliente).filter_by(cnpj="10.000.000/0001-01").count() == 1
+
+
+def test_levar_todas_do_filtro_so_leva_as_confirmadas_ativas(cliente_http, token, com_lista, receita, db):
+    receita.respostas["20000000000102"] = {"situacao": "BAIXADA", "socios": ""}
+    _conferir(cliente_http, token, cidade="PONTA GROSSA", tipo="empresa")   # Alfa ativa, Beta baixada
+    r = cliente_http.post("/api/prospectos/levar-para-carteira", headers=_auth(token), json={
+        "todas_do_filtro": True, "filtros": {"cidade": "PONTA GROSSA", "tipo": "empresa"}})
+    assert r.json()["criados"] == 1
+    assert db.query(Cliente).filter_by(cnpj="10.000.000/0001-01").count() == 1
+    assert db.query(Cliente).filter_by(cnpj="20.000.000/0001-02").count() == 0
+
+
+def test_levar_sem_escolher_nada_da_erro_amigavel(cliente_http, token):
+    r = cliente_http.post("/api/prospectos/levar-para-carteira", json={}, headers=_auth(token))
+    assert r.status_code == 400 and "pelo menos uma" in r.json()["detail"]
+
+
+def test_localizar_novos_usa_rua_depois_cep_depois_cidade(cliente_http, token, com_lista, db, monkeypatch):
+    from app.services import geocodificacao as geo
+    monkeypatch.setattr(geo, "PAUSA_ENTRE_CONSULTAS", 0)
+    consultas = []
+
+    def falso(parametros):
+        consultas.append(list(parametros))
+        return (-25.09, -50.16) if "postalcode" in parametros else None  # a rua não acha, o CEP acha
+
+    monkeypatch.setattr(geo, "_buscar", falso)
+    ids = _ids(cliente_http, token, busca="Alfa")
+    cliente_http.post("/api/prospectos/levar-para-carteira", json={"ids": ids}, headers=_auth(token))
+
+    r = cliente_http.post("/api/prospectos/localizar", headers=_auth(token)).json()
+    assert r == {"processados": 1, "localizados": 1, "semLocal": 0, "restam": 0}
+    assert consultas == [["street", "city", "state"], ["postalcode"]]
+    c = db.query(Cliente).filter_by(cnpj="10.000.000/0001-01").one()
+    assert (c.lat, c.lng, c.geo_status) == (-25.09, -50.16, "cep")
+
+
+def test_localizar_que_falha_marca_para_nao_tentar_de_novo(cliente_http, token, com_lista, db, monkeypatch):
+    from app.services import geocodificacao as geo
+    monkeypatch.setattr(geo, "PAUSA_ENTRE_CONSULTAS", 0)
+    monkeypatch.setattr(geo, "_buscar", lambda parametros: None)
+    cliente_http.post("/api/prospectos/levar-para-carteira", headers=_auth(token),
+                      json={"ids": _ids(cliente_http, token, busca="Alfa")})
+    r = cliente_http.post("/api/prospectos/localizar", headers=_auth(token)).json()
+    assert r["semLocal"] == 1 and r["restam"] == 0
+    assert db.query(Cliente).filter_by(cnpj="10.000.000/0001-01").one().geo_status == "falhou"
+
+
+def test_vendedor_nao_leva_nem_localiza(cliente_http, token_vendedor):
+    assert cliente_http.post("/api/prospectos/levar-para-carteira", json={"ids": [1]},
+                             headers=_auth(token_vendedor)).status_code == 403
+    assert cliente_http.post("/api/prospectos/localizar", headers=_auth(token_vendedor)).status_code == 403
+
+
 # ------------------------------------------------------------------ acesso
 
 def test_exige_login(cliente_http):

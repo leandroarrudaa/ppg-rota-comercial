@@ -9,8 +9,9 @@ import { recomendar } from "../lib/recomendacao";
 import { gerarPdfDia } from "../lib/pdf";
 import { usarRotaExterna } from "../lib/rotaSalva";
 import { api } from "../lib/api";
-import { FAIXA_COR, FAIXA_CHIP, FAIXA_DOT, brl, telefoneFmt, recenciaTexto } from "../lib/format";
+import { corDoCliente, brl, telefoneFmt, recenciaTexto } from "../lib/format";
 import MapAutoSize from "../components/MapAutoSize";
+import ChipFaixa from "../components/ChipFaixa";
 
 function pinNumerado(n, cor, risco) {
   return L.divIcon({
@@ -343,14 +344,14 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
               const open = aberto === c.id;
               return (
                 <li key={c.id} className={"rota-item" + (open ? " aberto" : "")} onClick={() => { setAberto(open ? null : c.id); focar(c); }}>
-                  <span className="ordem-num" style={{ background: FAIXA_COR[c.faixa] }}>{i + 1}</span>
+                  <span className="ordem-num" style={{ background: corDoCliente(c) }}>{i + 1}</span>
                   <div className="rota-info">
                     <div className="rota-nome">{c.nome}</div>
                     <div className="rota-meta">
-                      <span className={"chip " + FAIXA_CHIP[c.faixa]}><span className={"dot " + FAIXA_DOT[c.faixa]} />{c.faixa}</span>
+                      <ChipFaixa c={c} />
                       {c.emRisco && <span className="chip chip-risk"><span className="dot dot-risk" />risco</span>}
                     </div>
-                    <div className="faint" style={{ fontSize: 12 }}>{c.bairro || c.cidade} · {brl(c.fat)}</div>
+                    <div className="faint" style={{ fontSize: 12 }}>{c.bairro || c.cidade} · {c.faixa ? brl(c.fat) : "cliente novo"}</div>
                     <div className="faint" style={{ fontSize: 11 }}>{textoAgenda(c)}</div>
                     {open && (
                       <div className="rota-rec">
@@ -387,10 +388,10 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
               <ul className="vizinhos-lista">
                 {vizinhosProximos.map(({ c, dist }) => (
                   <li key={c.id} className="vizinho-item">
-                    <span className={"chip " + FAIXA_CHIP[c.faixa]}><span className={"dot " + FAIXA_DOT[c.faixa]} /></span>
+                    <ChipFaixa c={c} semTexto />
                     <div className="vizinho-info">
                       <div className="vizinho-nome">{c.nome}</div>
-                      <div className="faint" style={{ fontSize: 11 }}>{brl(c.fat)} · a {dist.toFixed(1)} km da rota</div>
+                      <div className="faint" style={{ fontSize: 11 }}>{c.faixa ? brl(c.fat) : "cliente novo"} · a {dist.toFixed(1)} km da rota</div>
                     </div>
                     <button type="button" className="btn btn-ghost" onClick={() => adicionar(c)}>
                       + Incluir
@@ -413,7 +414,7 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
             <Marker
               key={c.id}
               position={[c.lat, c.lng]}
-              icon={pinNumerado(i + 1, FAIXA_COR[c.faixa], c.emRisco)}
+              icon={pinNumerado(i + 1, corDoCliente(c), c.emRisco)}
               ref={(m) => { if (m) markerRefs.current[c.id] = m; }}
             >
               <Popup>
@@ -425,10 +426,10 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
                   </div>
                   <div className="pop-tel">{telefoneFmt(c.telefone) || "sem telefone"}</div>
                   <div className="pop-meta">
-                    <span className={"chip " + FAIXA_CHIP[c.faixa]}><span className={"dot " + FAIXA_DOT[c.faixa]} />{c.faixa}</span>
+                    <ChipFaixa c={c} />
                     {c.emRisco && <span className="chip chip-risk"><span className="dot dot-risk" />risco</span>}
                   </div>
-                  <div className="pop-info">{brl(c.fat)} · {motivoVisita(c)}{c.cadencia ? ` · compra a cada ${c.cadencia}d` : ""}</div>
+                  <div className="pop-info">{c.faixa ? brl(c.fat) : "cliente novo"} · {motivoVisita(c)}{c.cadencia ? ` · compra a cada ${c.cadencia}d` : ""}</div>
                   <button
                     type="button"
                     className="btn btn-ghost"
@@ -450,10 +451,10 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
                 <div className="pop">
                   <div className="pop-nome">{c.nome}</div>
                   <div className="pop-meta">
-                    <span className={"chip " + FAIXA_CHIP[c.faixa]}><span className={"dot " + FAIXA_DOT[c.faixa]} />{c.faixa}</span>
+                    <ChipFaixa c={c} />
                     {c.emRisco && <span className="chip chip-risk"><span className="dot dot-risk" />risco</span>}
                   </div>
-                  <div className="pop-info">{brl(c.fat)} · a {dist.toFixed(1)} km da rota de hoje</div>
+                  <div className="pop-info">{c.faixa ? brl(c.fat) : "cliente novo"} · a {dist.toFixed(1)} km da rota de hoje</div>
                   <button
                     type="button"
                     className="btn btn-primary"

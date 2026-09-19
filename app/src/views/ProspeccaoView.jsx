@@ -11,6 +11,8 @@ const CIDADE_PADRAO = "PONTA GROSSA";
 // primeiro. Mesma regra das outras tabelas do app.
 const COLUNAS = [
   { campo: "razaoSocial", rotulo: "Empresa", ascPadrao: true },
+  { campo: "notaPotencial", rotulo: "Potencial", ascPadrao: false, num: true,
+    ajuda: "Nota de 0 a 100 de quão bom candidato a cliente ouro: ramo, estrutura e capital. Passe o mouse na nota para ver como foi montada." },
   { campo: "ramo", rotulo: "Ramo", ascPadrao: true },
   { campo: "porte", rotulo: "Porte", ascPadrao: true },
   { campo: "capitalSocial", rotulo: "Capital social", ascPadrao: false, num: true },
@@ -31,7 +33,7 @@ const COLUNAS_RAMOS = [
 ];
 
 const FILTROS_INICIAIS = {
-  busca: "", ramo: "", tipo: "empresa", porte: "", situacao: "", ordenar: "capitalSocial", direcao: "desc",
+  busca: "", ramo: "", tipo: "empresa", porte: "", situacao: "", notaMin: 0, ordenar: "notaPotencial", direcao: "desc",
 };
 
 function SituacaoReceita({ valor }) {
@@ -76,6 +78,8 @@ export default function ProspeccaoView() {
   const [versaoLista, setVersaoLista] = useState(0);
   const [conferencia, setConferencia] = useState(null); // { rodando, ativas, naoAtivas, falhas, restam, mensagem }
   const pararRef = useRef(false);
+  const [selecionados, setSelecionados] = useState(() => new Map()); // id -> nome
+  const [levando, setLevando] = useState(null); // { fase, criados, localizados, semLocal, restam, mensagem }
 
   const carregarResumo = useCallback(() => {
     api.get(`/api/prospectos/resumo?cidade=${encodeURIComponent(cidade)}`)
@@ -107,6 +111,7 @@ export default function ProspeccaoView() {
     if (filtros.tipo) params.set("tipo", filtros.tipo);
     if (filtros.porte) params.set("porte", filtros.porte);
     if (filtros.situacao) params.set("situacao", filtros.situacao);
+    if (filtros.notaMin > 0) params.set("notaMin", String(filtros.notaMin));
     if (filtros.busca.trim().length >= 2) params.set("busca", filtros.busca.trim());
     api.get(`/api/prospectos?${params}`)
       .then(setDados)
@@ -134,6 +139,7 @@ export default function ProspeccaoView() {
         const corpo = {
           cidade: cidade || null, ramo: filtros.ramo || null, tipo: filtros.tipo || null,
           porte: filtros.porte || null, busca: filtros.busca.trim().length >= 2 ? filtros.busca.trim() : null,
+          nota_min: filtros.notaMin > 0 ? filtros.notaMin : null,
         };
         const r = await api.post("/api/prospectos/conferir-receita", corpo);
         ativas += r.ativas; naoAtivas += r.naoAtivas; falhas += r.falhas; restam = r.restam;
@@ -146,6 +152,60 @@ export default function ProspeccaoView() {
       mensagem = e.message;
     } finally {
       setConferencia({ rodando: false, ativas, naoAtivas, falhas, restam, mensagem });
+      carregar();
+      carregarResumo();
+    }
+  }
+
+  function alternarSelecao(p) {
+    setSelecionados((s0) => {
+      const novo = new Map(s0);
+      if (novo.has(p.id)) novo.delete(p.id);
+      else novo.set(p.id, p.razaoSocial);
+      return novo;
+    });
+  }
+
+  function alternarPagina() {
+    const pagina = dados?.itens || [];
+    setSelecionados((s0) => {
+      const novo = new Map(s0);
+      if (pagina.every((p) => novo.has(p.id))) pagina.forEach((p) => novo.delete(p.id));
+      else pagina.forEach((p) => novo.set(p.id, p.razaoSocial));
+      return novo;
+    });
+  }
+
+  // Leva as escolhidas (ou todas as confirmadas ativas do filtro) para a carteira como
+  // cliente novo, e em seguida acha cada endereço no mapa, um lote por vez.
+  async function levarParaCarteira(todasDoFiltro) {
+    if (todasDoFiltro && !window.confirm(
+      "Levar para a carteira TODAS as empresas deste filtro que a Receita já confirmou como ativas?\n\n" +
+      "Elas viram clientes novos e passam a aparecer no mapa e nos planos.")) return;
+    setErro("");
+    setLevando({ fase: "levando", criados: 0, localizados: 0, semLocal: 0, restam: 0, mensagem: "" });
+    let criados = 0, localizados = 0, semLocal = 0, mensagem = "";
+    try {
+      const corpo = todasDoFiltro
+        ? { todas_do_filtro: true, filtros: {
+            cidade: cidade || null, ramo: filtros.ramo || null, tipo: filtros.tipo || null, porte: filtros.porte || null,
+            busca: filtros.busca.trim().length >= 2 ? filtros.busca.trim() : null,
+            nota_min: filtros.notaMin > 0 ? filtros.notaMin : null } }
+        : { ids: [...selecionados.keys()] };
+      const r = await api.post("/api/prospectos/levar-para-carteira", corpo);
+      criados = r.criados;
+      setSelecionados(new Map());
+      for (;;) {
+        setLevando({ fase: "localizando", criados, localizados, semLocal, restam: 0, mensagem: "" });
+        const loc = await api.post("/api/prospectos/localizar", {});
+        localizados += loc.localizados; semLocal += loc.semLocal;
+        if (loc.restam === 0 || loc.processados === 0) break;
+      }
+      if (r.acimaDoLimite) mensagem = "Havia mais empresas no filtro. Repita para levar as próximas.";
+    } catch (e) {
+      mensagem = e.message;
+    } finally {
+      setLevando({ fase: "fim", criados, localizados, semLocal, restam: 0, mensagem });
       carregar();
       carregarResumo();
     }
@@ -322,6 +382,14 @@ export default function ProspeccaoView() {
                 <option value="Pequena">Pequena</option>
                 <option value="Demais">Média/grande (Demais)</option>
               </select>
+              <label className="faint" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                Nota mínima
+                <input
+                  className="input" type="number" min="0" max="100" step="5" style={{ width: 70 }}
+                  value={filtros.notaMin || ""} placeholder="0"
+                  onChange={(e) => mudarFiltro("notaMin", Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                />
+              </label>
               <select className="input" value={filtros.situacao} onChange={(e) => mudarFiltro("situacao", e.target.value)}>
                 <option value="">Ativas e não conferidas</option>
                 <option value="ativa">Só confirmadas ativas</option>
@@ -343,6 +411,23 @@ export default function ProspeccaoView() {
                 {dados && !carregando && ` · ${n(dados.pendentesConferencia)} ainda não conferidas na Receita`}
               </span>
               <div className="carteira-acoes">
+                {selecionados.size > 0 && (
+                  <button
+                    className="btn btn-primary"
+                    disabled={levando && levando.fase !== "fim"}
+                    onClick={() => levarParaCarteira(false)}
+                  >
+                    Levar {selecionados.size} para a carteira
+                  </button>
+                )}
+                <button
+                  className="btn btn-ghost"
+                  disabled={levando && levando.fase !== "fim"}
+                  onClick={() => levarParaCarteira(true)}
+                  title="Leva todas as empresas deste filtro que a Receita já confirmou como ativas"
+                >
+                  Levar todas as confirmadas
+                </button>
                 {conferencia?.rodando ? (
                   <button className="btn btn-ghost" onClick={() => { pararRef.current = true; }}>Parar</button>
                 ) : (
@@ -357,6 +442,17 @@ export default function ProspeccaoView() {
                 )}
               </div>
             </div>
+
+            {levando && (
+              <div className="carteira-aviso">
+                {levando.fase === "fim" ? "Pronto. " : levando.fase === "levando" ? "Levando para a carteira… " : "Localizando os endereços no mapa… "}
+                <b>{n(levando.criados)}</b> {levando.criados === 1 ? "virou cliente novo" : "viraram clientes novos"}
+                {levando.fase !== "levando" && <>, <b>{n(levando.localizados)}</b> no mapa</>}
+                {levando.semLocal > 0 && <>, <b>{n(levando.semLocal)}</b> sem localização (marque o pino no mapa depois)</>}.
+                {levando.fase === "localizando" && " Não feche esta página."}
+                {levando.mensagem && <div style={{ marginTop: 4 }}>{levando.mensagem}</div>}
+              </div>
+            )}
 
             {conferencia && (
               <div className="carteira-aviso">
@@ -373,6 +469,14 @@ export default function ProspeccaoView() {
               <table className="carteira-tabela">
                 <thead>
                   <tr>
+                    <th style={{ width: 34 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Selecionar todas desta página"
+                        checked={itens.length > 0 && itens.every((p) => selecionados.has(p.id))}
+                        onChange={alternarPagina}
+                      />
+                    </th>
                     {COLUNAS.map((c) => (
                       <th
                         key={c.campo}
@@ -387,14 +491,20 @@ export default function ProspeccaoView() {
                 </thead>
                 <tbody>
                   {itens.length === 0 && !carregando ? (
-                    <tr><td colSpan={COLUNAS.length} className="muted" style={{ padding: 20, textAlign: "center" }}>
+                    <tr><td colSpan={COLUNAS.length + 1} className="muted" style={{ padding: 20, textAlign: "center" }}>
                       Nenhuma empresa com esses filtros.
                     </td></tr>
                   ) : itens.map((p) => (
-                    <tr key={p.id}>
+                    <tr key={p.id} className={selecionados.has(p.id) ? "marcada" : ""}>
+                      <td>
+                        <input type="checkbox" checked={selecionados.has(p.id)} onChange={() => alternarSelecao(p)} />
+                      </td>
                       <td>
                         <div className="carteira-nome">{p.razaoSocial}</div>
                         <div className="faint" style={{ fontSize: 12 }}>{cnpjFmt(p.cnpj)}</div>
+                      </td>
+                      <td className="num" title={p.potencialDetalhe}>
+                        <span className="chip chip-potencial">★ {p.notaPotencial}</span>
                       </td>
                       <td>{p.ramo || "—"}</td>
                       <td>{p.porte || "—"}</td>

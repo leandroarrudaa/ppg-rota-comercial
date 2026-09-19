@@ -110,6 +110,9 @@ class Cliente(Base):
     porte: Mapped[str | None] = mapped_column(String(20))
     capital_social: Mapped[float | None] = mapped_column(Float)
     cnae: Mapped[str | None] = mapped_column(String(200))
+    # Ramo já calculado — só as empresas que vieram da Prospecção têm (elas trazem o
+    # CNAE como código, não como descrição). Nas demais o ramo sai do `cnae`.
+    ramo: Mapped[str | None] = mapped_column(String(60))
     telefone: Mapped[str | None] = mapped_column(String(30))
     email: Mapped[str | None] = mapped_column(String(120))
 

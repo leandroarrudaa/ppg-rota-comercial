@@ -88,6 +88,10 @@ class ClienteOut(BaseModel):
     # tinha acabado de ser visitado. Nulo = nunca visitado.
     ultimaVisita: date | None = None
     proximaVisita: date | None = None
+    # Potencial ouro (ver services/potencial.py). Nulo para quem já é ouro ou está inativo.
+    ramo: str | None = None
+    notaPotencial: int | None = None
+    potencialDetalhe: str | None = None  # "Ramo 35 · Estrutura 25 · ..."
 
 
 class HistoricoItemOut(BaseModel):

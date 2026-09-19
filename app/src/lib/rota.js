@@ -19,7 +19,8 @@ export function distKm(a, b) {
 export function valorEstrategico(c) {
   const base = { Ouro: 100, Prata: 45, Bronze: 18 }[c.faixa] || 10;
   const risco = c.emRisco ? 70 : 0; // reativar quem esfriou é prioridade
-  return base + risco + bonusAtraso(c);
+  // bonusPotencial só existe quando o filtro "só potencial" está ligado (ver lib/potencial.js)
+  return base + risco + bonusAtraso(c) + (c.bonusPotencial || 0);
 }
 
 // ---------------------------------------------------------------
@@ -71,6 +72,7 @@ export function textoAgenda(c) {
 }
 
 export function motivoVisita(c) {
+  if (c.origem === "novo") return "Conhecer — cliente novo";
   if (c.emRisco) return "Reativar — esfriou";
   if (c.faixa === "Ouro") return "Blindar relacionamento";
   if (c.faixa === "Prata") return "Fazer subir de faixa";

@@ -18,6 +18,11 @@ export const FAIXA_DOT = {
   Bronze: "dot-bronze",
 };
 
+// Cor do pino/ponto de um cliente: a da faixa, ou roxo para cliente novo (sem faixa)
+export function corDoCliente(c) {
+  return FAIXA_COR[c.faixa] || "#7b5cf0";
+}
+
 export function brl(v) {
   return (v || 0).toLocaleString("pt-BR", {
     style: "currency",

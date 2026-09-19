@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { scriptContato } from "../lib/recomendacao";
 import { gerarPdfContato } from "../lib/pdf";
 import { DIAS } from "../lib/rota";
-import { FAIXA_COR, FAIXA_CHIP, FAIXA_DOT, brl, telefoneFmt, recenciaTexto } from "../lib/format";
+import { brl, telefoneFmt, recenciaTexto } from "../lib/format";
+import ChipFaixa from "../components/ChipFaixa";
 import FichaCliente from "./FichaCliente";
 
 const PRIO_PESO = { Alta: 0, Média: 1, Baixa: 2 };
@@ -113,7 +114,7 @@ export default function ContatoView({ clientes, usuario, aoAtualizarCliente, vis
                     <span className={prioClasse(s.prioridade)}>{s.prioridade}</span>
                   </div>
                   <div className="contato-tags">
-                    <span className={"chip " + FAIXA_CHIP[c.faixa]}><span className={"dot " + FAIXA_DOT[c.faixa]} />{c.faixa}</span>
+                    <ChipFaixa c={c} />
                     {c.emRisco && <span className="chip chip-risk"><span className="dot dot-risk" />conta grande</span>}
                     <span className="contato-tempo">{recenciaTexto(c.recencia)} sem comprar</span>
                   </div>

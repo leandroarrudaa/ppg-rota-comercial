@@ -12,8 +12,14 @@ from ..schemas import ClienteAtualizar, ClienteCriarManual, ClienteOut
 def para_saida(c: Cliente, tem_promessa: bool = False, agenda: dict | None = None) -> ClienteOut:
     """Converte o modelo do banco pro formato que o frontend já consome
     (mesmos nomes de campo do antigo clientes.json)."""
+    from .potencial import descricao_das_partes, nota_de_cliente
+    from .ramos import ramo_por_descricao
     from .visitas import proxima_visita
     ultima_visita, proxima = proxima_visita(agenda, c.faixa)
+    # A nota é calculada a cada leitura, não gravada: muda sozinha quando o cliente
+    # compra (recência) ou quando os pesos mudam — mesma regra do Plano da Semana,
+    # que nunca "congela".
+    calculo = nota_de_cliente(c)
     return ClienteOut(
         id=c.id,
         cnpj=c.cnpj,
@@ -52,6 +58,9 @@ def para_saida(c: Cliente, tem_promessa: bool = False, agenda: dict | None = Non
         temPromessaPendente=tem_promessa,
         ultimaVisita=ultima_visita,
         proximaVisita=proxima,
+        ramo=c.ramo or ramo_por_descricao(c.cnae),
+        notaPotencial=calculo[0] if calculo else None,
+        potencialDetalhe=descricao_das_partes(calculo[1]) if calculo else None,
     )
 
 

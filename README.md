@@ -102,6 +102,24 @@ backend/
 scripts/                  # pipeline original da planilha (histórico)
 ```
 
+## Potencial ouro e clientes novos
+
+Cada cliente que **não é ouro** (prata, bronze e cliente novo) recebe uma **nota de potencial de 0 a 100**,
+calculada na hora (nunca fica velha): ramo (até 35), estrutura de compra (até 25), capital social (até 20),
+histórico de compras (até 10) e **reativação** (até 10). A reativação é a recência **ao contrário**: quem já
+comprou e parou de vir vale mais, porque o objetivo é trazer de volta quem sumiu. Empresa que nunca comprou
+não tem histórico nem reativação, e a nota é reescalada para 0–100. **Distância da loja não entra**: ela
+mede compra de balcão, e o foco é venda externa. Regras e pesos em `backend/app/services/potencial.py`
+(primeiro palpite, ainda não validado; o mouse sobre a nota mostra como ela foi montada).
+
+- **Filtro nas telas** (Mapa, Plano de Visitas, Plano de Contato e Rota do Dia): seletor
+  **Todos / Antigos / Novos** e o botão **Só potencial ouro** com nota mínima. A escolha vale para todas as
+  telas e fica lembrada. Com "só potencial" ligado, a nota também ajuda a ordenar a rota.
+- **Levar para a carteira:** na aba Prospecção, marque empresas (ou use "Levar todas as confirmadas") e elas
+  viram **cliente novo**, com o endereço localizado no mapa pelo OpenStreetMap (em lotes, com a página
+  aberta). Sem localização a empresa existe mas não aparece no mapa; marque o pino à mão.
+- Cliente novo entra no **Plano de Visitas** (não tem recência, então não vai para o de Contato).
+
 ## Prospecção: lista de empresas novas
 
 A aba **Prospecção** (só Admin) guarda empresas que ainda **não são clientes**, vindas de uma

@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import VisitasView from "./VisitasView";
 import ContatoView from "./ContatoView";
 import { FAIXAS, num } from "../lib/format";
+import { FILTRO_POTENCIAL_PADRAO, aplicarFiltroPotencial, useFiltroPotencial } from "../lib/potencial";
+import FiltroPotencial from "../components/FiltroPotencial";
 
 const FXKEY = { Ouro: "gold", Prata: "silver", Bronze: "bronze" };
 const NOTAS_RFM = [1, 2, 3, 4, 5];
@@ -12,6 +14,7 @@ export default function PlanoView({
   aoAtualizarCliente, visitaPendente, aoIniciarVisita, aoFinalizarVisita, aoCancelarVisita,
 }) {
   const [sub, setSub] = useState("Visitas");
+  const [fp, mudarFp] = useFiltroPotencial();
   const [meses, setMeses] = useState(6); // "ativo" = comprou nos últimos N meses
   const [faturamentoMin, setFaturamentoMin] = useState(0);
   const [ramo, setRamo] = useState(""); // cnae (ramo de atividade), vazio = todos
@@ -38,11 +41,19 @@ export default function PlanoView({
 
   const faixaPadrao = FAIXAS.every((f) => faixasOn[f]);
   const rfmPadrao = Object.keys(RFM_PADRAO).every((k) => rfm[k] === RFM_PADRAO[k]);
-  const temFiltro = faturamentoMin > 0 || ramo || !faixaPadrao || !rfmPadrao;
+  const fpAtivo = fp.soPotencial || fp.origem !== "todos";
+  const temFiltro = faturamentoMin > 0 || ramo || !faixaPadrao || !rfmPadrao || fpAtivo;
+
+  // origem (antigos/novos) e "só potencial" valem para o Plano de Visitas E para o de Contato
+  const clientesBase = useMemo(() => aplicarFiltroPotencial(clientes, fp), [clientes, fp]);
+  const qtdPotencial = useMemo(
+    () => clientes.filter((c) => (fp.origem === "todos" || c.origem === fp.origem) && c.notaPotencial != null && c.notaPotencial >= fp.notaMin).length,
+    [clientes, fp.origem, fp.notaMin]
+  );
 
   const clientesFiltrados = useMemo(() => {
     if (!temFiltro) return clientes;
-    return clientes.filter((c) => {
+    return clientesBase.filter((c) => {
       if (faturamentoMin > 0 && (c.fat || 0) < faturamentoMin) return false;
       if (ramo && c.cnae !== ramo) return false;
       if (c.faixa && !faixasOn[c.faixa]) return false;
@@ -54,14 +65,18 @@ export default function PlanoView({
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientes, faturamentoMin, ramo, faixasOn, rfm, temFiltro]);
+  }, [clientesBase, clientes, faturamentoMin, ramo, faixasOn, rfm, temFiltro]);
 
   const { ativos, adormecidos } = useMemo(() => {
     const corte = meses * 30;
     const ativos = [];
     const adormecidos = [];
     for (const c of clientesFiltrados) {
-      if (c.recencia == null) continue;
+      if (c.recencia == null) {
+        // cliente novo nunca comprou: não tem "recência", vai direto para as visitas
+        if (c.origem === "novo") ativos.push(c);
+        continue;
+      }
       if (c.recencia <= corte) ativos.push(c);
       else adormecidos.push(c);
     }
@@ -73,6 +88,7 @@ export default function PlanoView({
     setRamo("");
     setFaixasOn({ Ouro: true, Prata: true, Bronze: true });
     setRfm(RFM_PADRAO);
+    mudarFp(FILTRO_POTENCIAL_PADRAO);
   }
 
   // Atalho pro perfil que o gerente descreveu: comprou um valor legal (M
@@ -119,6 +135,8 @@ export default function PlanoView({
 
         <div className={"plano-filtros-corpo" + (filtrosMobileAbertos ? " aberto" : "")}>
         <div className="plano-filtros-linha">
+          <FiltroPotencial filtro={fp} aoMudar={mudarFp} contagem={qtdPotencial} />
+
           <div className="filtro-grupo">
             <span className="filtro-titulo">Faturamento mínimo</span>
             <input

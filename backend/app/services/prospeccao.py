@@ -14,9 +14,10 @@ from sqlalchemy.dialects.postgresql import insert as insert_pg
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 from sqlalchemy.orm import Session
 
-from ..models import Cliente, Prospecto, StatusProspecto
+from ..models import Cliente, OrigemCliente, Prospecto, StatusCliente, StatusProspecto
 from .cnpj import normalizar_cnpj
 from .fontes.lista_prospectos import LinhaLista, ListaLida
+from .potencial import nota_sql
 from .ramos import TIPO_EMPRESA, TIPO_MEI, classificar_tipo, normalizar_porte, ramo_por_cnae
 
 # Linhas por comando de gravação. Postgres aceita 65 mil parâmetros por comando (1.000 x ~19 colunas = 19 mil);
@@ -35,6 +36,7 @@ _ORDENAVEIS = {
     "cidade": Prospecto.cidade,
     "telefone": Prospecto.telefone,
     "situacaoLista": Prospecto.situacao_lista,
+    "notaPotencial": nota_sql(Prospecto),
     "situacaoReceita": Prospecto.situacao_receita,
     "socios": Prospecto.socios,
     "status": Prospecto.status,
@@ -239,8 +241,11 @@ def resumo(db: Session, cidade: str | None = None) -> dict:
 
 def filtrar(
     db: Session, *, cidade=None, ramo=None, tipo=None, porte=None, status=None, busca=None, situacao="",
+    nota_min=None,
 ):
     q = _base(db, cidade, situacao=situacao)
+    if nota_min:
+        q = q.filter(nota_sql(Prospecto) >= nota_min)
     if ramo:
         q = q.filter(Prospecto.ramo == ramo)
     if tipo:
@@ -286,7 +291,11 @@ def pendentes_de_conferencia(db: Session, limite: int | None = None, **filtros):
 
 
 def para_saida(p: Prospecto) -> dict:
+    from .potencial import calcular_nota, descricao_das_partes
+    nota, partes = calcular_nota(ramo=p.ramo, tipo=p.tipo, capital=p.capital_social, porte=p.porte)
     return {
+        "notaPotencial": nota,
+        "potencialDetalhe": descricao_das_partes(partes),
         "id": p.id,
         "cnpj": p.cnpj,
         "razaoSocial": p.razao_social,
@@ -309,3 +318,55 @@ def para_saida(p: Prospecto) -> dict:
         "status": p.status.value if p.status else None,
         "lote": p.lote,
     }
+
+
+# ------------------------------------------------------------------ levar para a carteira
+
+LIMITE_POR_CHAMADA = 500
+
+
+def _cnpj_formatado(digitos: str) -> str:
+    """A carteira guarda o CNPJ formatado ("11.111.111/0001-11"); a lista, só dígitos."""
+    d = normalizar_cnpj(digitos)
+    if len(d) != 14:
+        return digitos
+    return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}"
+
+
+def levar_para_carteira(db: Session, prospectos: list[Prospecto]) -> dict:
+    """Vira cliente novo (origem NOVO) cada prospecto recebido, com a nota de potencial.
+
+    A localização no mapa é feita depois, em lotes (ver geocodificacao.py): sem
+    coordenada o cliente existe, mas ainda não aparece no mapa nem na rota.
+    Quem já é cliente é pulado — nunca cria duplicata pelo mesmo CNPJ.
+    """
+    ja = _cnpjs_da_carteira(db)
+    criados = pulados = 0
+    for p in prospectos[:LIMITE_POR_CHAMADA]:
+        if p.cnpj in ja:
+            pulados += 1
+            continue
+        endereco = ", ".join(x for x in (p.logradouro, p.numero) if x) or None
+        db.add(Cliente(
+            cnpj=_cnpj_formatado(p.cnpj),
+            nome=p.razao_social,
+            endereco=endereco,
+            bairro=p.bairro,
+            cep=p.cep,
+            cidade=p.cidade,
+            uf=p.uf,
+            telefone=p.telefone,
+            email=p.email,
+            porte=p.porte,
+            capital_social=p.capital_social,
+            ramo=p.ramo,
+            # quem provavelmente decide a compra, vindo da conferência na Receita
+            contato_nome=(p.socios.split(";")[0].strip() if p.socios else None),
+            origem=OrigemCliente.NOVO,
+            status=StatusCliente.ATIVO,
+            aceita_visita=True,
+        ))
+        p.status = StatusProspecto.VALE_VISITA
+        ja.add(p.cnpj)
+        criados += 1
+    return {"criados": criados, "jaEramClientes": pulados, "acimaDoLimite": max(0, len(prospectos) - LIMITE_POR_CHAMADA)}

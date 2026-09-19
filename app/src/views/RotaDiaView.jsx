@@ -3,9 +3,12 @@ import { MapContainer, TileLayer, Marker, Polyline, Popup, Tooltip, useMap, useM
 import L from "leaflet";
 import { api } from "../lib/api";
 import { valorEstrategico, vizinhoMaisProximo, refinar2opt, otimizarRotaEstrada, motivoVisita } from "../lib/rota";
-import { FAIXAS, FAIXA_COR, FAIXA_CHIP, FAIXA_DOT, brl, num, telefoneFmt } from "../lib/format";
+import { FAIXAS, corDoCliente, brl, num, telefoneFmt } from "../lib/format";
+import { passaFiltroPotencial, aplicarFiltroPotencial, useFiltroPotencial } from "../lib/potencial";
 import { carregarRota, salvarRota, limparRota } from "../lib/rotaSalva";
 import MapAutoSize from "../components/MapAutoSize";
+import ChipFaixa from "../components/ChipFaixa";
+import FiltroPotencial from "../components/FiltroPotencial";
 import FichaCliente from "./FichaCliente";
 
 const FXKEY = { Ouro: "gold", Prata: "silver", Bronze: "bronze" };
@@ -105,6 +108,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
 
   const [faixasOn, setFaixasOn] = useState({ Ouro: true, Prata: true, Bronze: true });
   const [soRisco, setSoRisco] = useState(false);
+  const [fp, mudarFp] = useFiltroPotencial();
   const [faturamentoMin, setFaturamentoMin] = useState(0);
   const [rfm, setRfm] = useState(RFM_PADRAO);
   // Só importa no mobile (CSS): faturamento/faixa/risco recolhidos por
@@ -245,13 +249,15 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
       if (c.M == null || c.M < rfm.mMin || c.M > rfm.mMax) return false;
     }
     if (soRisco && !c.emRisco) return false;
+    if (!passaFiltroPotencial(c, fp)) return false;
     return true;
   }
 
-  const poolFiltrado = useMemo(() => poolAtivo.filter(passaFiltro), [poolAtivo, faixasOn, soRisco, faturamentoMin, rfm, rfmPadrao]);
+  // com "só potencial" ligado a nota também entra na ordem sugerida (bonusPotencial, ver lib/potencial.js)
+  const poolFiltrado = useMemo(() => aplicarFiltroPotencial(poolAtivo.filter(passaFiltro), fp), [poolAtivo, faixasOn, soRisco, faturamentoMin, rfm, rfmPadrao, fp]);
   // os pinos do mapa também precisam respeitar o filtro — senão o mapa mostra
   // cor/faixa que a lista já escondeu, ficando incoerente com os contadores
-  const bboxFiltrado = useMemo(() => candidatosBbox.filter(passaFiltro), [candidatosBbox, faixasOn, soRisco, faturamentoMin, rfm, rfmPadrao]);
+  const bboxFiltrado = useMemo(() => candidatosBbox.filter(passaFiltro), [candidatosBbox, faixasOn, soRisco, faturamentoMin, rfm, rfmPadrao, fp]);
 
   const antigos = useMemo(
     () => poolFiltrado.filter((c) => c.origem === "antigo").sort((a, b) => valorEstrategico(b) - valorEstrategico(a)),
@@ -371,7 +377,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
                     className={"rota-item" + (jaVisitado ? " rota-item-visitado" : "")}
                     onClick={() => abrirFicha(c)}
                   >
-                    <span className="ordem-num" style={{ background: FAIXA_COR[c.faixa] || "#8e949b" }}>{i + 1}</span>
+                    <span className="ordem-num" style={{ background: corDoCliente(c) }}>{i + 1}</span>
                     <div className="rota-info">
                       <div className="rota-nome">
                         {c.nome} {c.temPromessaPendente && <span title="Tem promessa pendente">🎁</span>}
@@ -404,7 +410,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
             <FitRota pontos={rota.ordem} />
             <Polyline positions={linha} pathOptions={{ color: "#0a0a0b", weight: 4, opacity: 0.65 }} />
             {rota.ordem.map((c, i) => (
-              <Marker key={c.id} position={[c.lat, c.lng]} icon={pinNumerado(i + 1, FAIXA_COR[c.faixa] || "#8e949b", c.emRisco)}>
+              <Marker key={c.id} position={[c.lat, c.lng]} icon={pinNumerado(i + 1, corDoCliente(c), c.emRisco)}>
                 <Popup>
                   <b>{i + 1}. {c.nome}</b><br />
                   {c.faixa ? `${c.faixa} · ${brl(c.fat)} · ${motivoVisita(c)}` : "Cliente novo"}
@@ -456,6 +462,12 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
         </button>
 
         <div className={"rota-dia-filtros-extra" + (filtrosAbertos ? " aberto" : "")}>
+          <FiltroPotencial
+            filtro={fp}
+            aoMudar={mudarFp}
+            contagem={poolAtivo.filter((c) => (fp.origem === "todos" || c.origem === fp.origem) && c.notaPotencial != null && c.notaPotencial >= fp.notaMin).length}
+          />
+
           <div className="filtro-grupo">
             <span className="filtro-titulo">Faturamento mínimo</span>
             <input
@@ -578,7 +590,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
             ) : antigos.map((c) => (
               <label key={c.id} className="rota-dia-item" title={`${c.nome} · ${brl(c.fat)}`}>
                 <input type="checkbox" checked={selecionados.has(c.id)} onChange={() => alternar(c.id)} />
-                <span className={"chip " + FAIXA_CHIP[c.faixa]}><span className={"dot " + FAIXA_DOT[c.faixa]} /></span>
+                <ChipFaixa c={c} semTexto />
                 <span className="rota-dia-nome">{c.nome}</span>
                 <span className="rota-dia-fat faint">{brl(c.fat)}</span>
                 {c.temPromessaPendente && <span title="Tem promessa pendente">🎁</span>}
@@ -592,6 +604,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
             ) : novos.map((c) => (
               <label key={c.id} className="rota-dia-item">
                 <input type="checkbox" checked={selecionados.has(c.id)} onChange={() => alternar(c.id)} />
+                <ChipFaixa c={c} semTexto />
                 <span className="rota-dia-nome">{c.nome}</span>
                 {c.temPromessaPendente && <span title="Tem promessa pendente">🎁</span>}
               </label>
@@ -609,7 +622,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
             <Marker
               key={c.id}
               position={[c.lat, c.lng]}
-              icon={pinNumerado(selecionados.has(c.id) ? "✓" : "", selecionados.has(c.id) ? "#1e8e5a" : (FAIXA_COR[c.faixa] || "#8e949b"), c.emRisco)}
+              icon={pinNumerado(selecionados.has(c.id) ? "✓" : "", selecionados.has(c.id) ? "#1e8e5a" : (corDoCliente(c)), c.emRisco)}
               eventHandlers={{ click: () => alternar(c.id) }}
             >
               {/* Tooltip (hover) em vez de Popup (clique): um balão de clique

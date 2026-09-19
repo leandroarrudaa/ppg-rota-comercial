@@ -11,6 +11,18 @@ export function recomendar(c) {
   const atrasado = cad && rec != null && rec > cad * 1.4;
   const diasAtraso = atrasado ? Math.round(rec - cad) : 0;
 
+  // 0) cliente novo (nunca comprou): primeira visita, conhecer e apresentar
+  if (c.origem === "novo") {
+    return {
+      tag: "Conhecer",
+      cor: "#4b34b0",
+      titulo: "Cliente novo — primeira visita",
+      texto:
+        "Ainda não comprou. Descobrir quem faz as compras, o que a empresa usa no dia a dia " +
+        "e apresentar o que vendemos para o ramo dela. Levar o cartão do comprador.",
+    };
+  }
+
   // 1) conta grande que esfriou (alerta máximo)
   if (c.emRisco) {
     return {

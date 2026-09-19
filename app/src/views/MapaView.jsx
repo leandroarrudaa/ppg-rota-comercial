@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
-import { FAIXAS, FAIXA_COR, FAIXA_CHIP, FAIXA_DOT, brl, num, recenciaTexto } from "../lib/format";
+import { FAIXAS, corDoCliente, brl, num, recenciaTexto } from "../lib/format";
+import { passaFiltroPotencial, useFiltroPotencial } from "../lib/potencial";
+import ChipFaixa from "../components/ChipFaixa";
+import FiltroPotencial from "../components/FiltroPotencial";
 import MapAutoSize from "../components/MapAutoSize";
 import FichaCliente from "./FichaCliente";
 import NovoClienteModal from "./NovoClienteModal";
@@ -51,6 +54,7 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
   const [soRisco, setSoRisco] = useState(false);
   const [cidade, setCidade] = useState("Todas");
   const [busca, setBusca] = useState("");
+  const [fp, mudarFp] = useFiltroPotencial();
   const [sel, setSel] = useState(null);
   const [fichaAberta, setFichaAberta] = useState(false);
   const [novoClienteAberto, setNovoClienteAberto] = useState(false);
@@ -83,13 +87,14 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return baseClientes.filter((d) => {
-      if (!faixasOn[d.faixa]) return false;
+      if (d.faixa && !faixasOn[d.faixa]) return false; // cliente novo não tem faixa
+      if (!passaFiltroPotencial(d, fp)) return false;
       if (soRisco && !d.emRisco) return false;
       if (cidade !== "Todas" && d.cidade !== cidade) return false;
       if (q && !d.nome.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [baseClientes, faixasOn, soRisco, cidade, busca]);
+  }, [baseClientes, faixasOn, soRisco, cidade, busca, fp]);
 
   // reflete a atualização vinda da ficha no card lateral, na lista principal
   // do App e na lista local de inativos (some/aparece conforme o status novo)
@@ -106,7 +111,7 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
   const contagem = useMemo(() => {
     const c = { Ouro: 0, Prata: 0, Bronze: 0, risco: 0 };
     for (const d of filtrados) {
-      c[d.faixa] = (c[d.faixa] || 0) + 1;
+      if (d.faixa) c[d.faixa] = (c[d.faixa] || 0) + 1;
       if (d.emRisco) c.risco++;
     }
     return c;
@@ -149,6 +154,12 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
         <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={() => setNovoClienteAberto(true)}>
           + Cliente novo
         </button>
+
+        <FiltroPotencial
+          filtro={fp}
+          aoMudar={mudarFp}
+          contagem={baseClientes.filter((d) => (fp.origem === "todos" || d.origem === fp.origem) && d.notaPotencial != null && d.notaPotencial >= fp.notaMin).length}
+        />
 
         <div className="filtro-grupo">
           <span className="filtro-titulo">Faixa RFM</span>
@@ -213,9 +224,7 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
         {sel && (
           <div className="cliente-card">
             <div className="stat-top">
-              <span className={"chip " + FAIXA_CHIP[sel.faixa]}>
-                <span className={"dot " + FAIXA_DOT[sel.faixa]} /> {sel.faixa}
-              </span>
+              <ChipFaixa c={sel} />
               {sel.emRisco && <span className="chip chip-risk"><span className="dot dot-risk" /> Em risco</span>}
               {sel.status === "inativo" && <span className="chip chip-inativo">Inativo</span>}
             </div>
@@ -225,13 +234,17 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
               {sel.cidade}/{sel.uf}
             </p>
             <div className="kv">
-              <div><span>Faturamento</span><b>{brl(sel.fat)} {sel.temPromessaPendente && <span title="Tem promessa pendente">🎁</span>}</b></div>
+              {sel.notaPotencial != null && (
+                <div><span>Potencial ouro</span><b>{sel.notaPotencial} <small className="faint">{sel.potencialDetalhe}</small></b></div>
+              )}
+              {sel.ramo && <div><span>Ramo</span><b>{sel.ramo}</b></div>}
+              <div><span>Faturamento</span><b>{sel.faixa ? brl(sel.fat) : "cliente novo"} {sel.temPromessaPendente && <span title="Tem promessa pendente">🎁</span>}</b></div>
               <div><span>Compras</span><b>{num(sel.compras)}</b></div>
               <div><span>Ticket médio</span><b>{brl(sel.ticket)}</b></div>
               <div><span>Última compra</span><b>{recenciaTexto(sel.recencia)}</b></div>
               <div><span>Cadência</span><b>{sel.cadencia ? `a cada ${sel.cadencia} dias` : "—"}</b></div>
               {sel.porte && <div><span>Porte</span><b>{sel.porte}</b></div>}
-              <div><span>Score RFM</span><b>{sel.score} <small className="faint">(R{sel.R} F{sel.F} M{sel.M})</small></b></div>
+              {sel.score != null && <div><span>Score RFM</span><b>{sel.score} <small className="faint">(R{sel.R} F{sel.F} M{sel.M})</small></b></div>}
             </div>
             <button
               className="btn btn-primary"
@@ -280,7 +293,7 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
               pathOptions={{
                 color: d.emRisco ? "#e8543f" : "#ffffff",
                 weight: d.emRisco ? 2 : 1.2,
-                fillColor: d.status === "inativo" ? "#9aa0a6" : FAIXA_COR[d.faixa],
+                fillColor: d.status === "inativo" ? "#9aa0a6" : corDoCliente(d),
                 fillOpacity: d.status === "inativo" ? 0.5 : 0.92,
               }}
               eventHandlers={{ click: () => { setSel(d); setModoMobile("painel"); } }}
@@ -288,7 +301,8 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
               <Popup>
                 <b>{d.nome}</b>
                 <br />
-                {d.status === "inativo" ? "Inativo · " : ""}{d.faixa}{d.emRisco ? " · em risco" : ""} · {brl(d.fat)}
+                {d.status === "inativo" ? "Inativo · " : ""}{d.faixa || "Cliente novo"}{d.emRisco ? " · em risco" : ""}
+                {d.faixa ? ` · ${brl(d.fat)}` : ""}{d.notaPotencial != null ? ` · ★ ${d.notaPotencial}` : ""}
               </Popup>
             </CircleMarker>
           ))}

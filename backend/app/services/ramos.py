@@ -60,6 +60,44 @@ def ramo_por_cnae(codigo) -> str:
     return RAMO_OUTROS
 
 
+# A carteira antiga guarda o CNAE como DESCRIÇÃO ("Instalação e manutenção elétrica"),
+# não como código. Mesmos ramos, casados por palavras-chave da descrição (a primeira
+# que casar vence). Foi a regra usada na análise do perfil dos clientes ouro.
+_REGRAS_DESCRICAO: list[tuple[str, str]] = [
+    ("Religioso / associações / clubes", r"religios|associa|clubes|defesa|sindic"),
+    ("Condomínios / imobiliário", r"condominio|imobiliari|incorporacao"),
+    ("Elétrica (instalação/manutenção)", r"instalacao e manutencao eletrica|instalacoes eletricas"),
+    ("Oficina / serviço de veículos",
+     r"(manutencao|reparacao|lanternagem|acessorios).*(veiculos|motocicletas)|veiculos automotores$"),
+    ("Comércio de peças/veículos", r"comercio.*(pecas e acessorios|automoveis|motocicletas)|combustiveis"),
+    ("Construção civil / obras",
+     r"construcao|obras|engenharia|terraplenagem|fundacoes|pintura de edificios|acabamento|alvenaria"),
+    ("Metalurgia / serralheria / esquadrias",
+     r"serralheria|estruturas metalicas|esquadrias|produtos de metal|movel.*metal|usinagem|letreiros"),
+    ("Manutenção / montagem industrial",
+     r"montagem industrial|usos industriais|instalacao de maquinas|manutencao e reparacao de maquinas|"
+     r"manutencao e reparacao de (aparelhos|equipamentos|veiculos ferro)|aluguel de outras maquinas"),
+    ("Fabricação de máquinas / equipamentos", r"fabricacao de (outras )?(maquinas|aparelhos)"),
+    ("Móveis / madeira", r"moveis|madeira|serrarias"),
+    ("Ar-condicionado / refrigeração", r"ar condicionado|refrigeracao"),
+    ("Varejo de ferragens / construção / elétrico", r"ferragens|materiais de construcao|material eletrico|vidros"),
+    ("Atacado", r"atacadista"),
+    ("Transporte", r"transporte"),
+    ("Varejo (outros)", r"comercio varejista"),
+]
+
+
+def ramo_por_descricao(descricao) -> str:
+    """Ramo a partir da descrição do CNAE (o formato guardado na carteira)."""
+    texto = _sem_acento_maiusculo(descricao).lower()
+    if not texto.strip():
+        return RAMO_OUTROS
+    for ramo, regra in _REGRAS_DESCRICAO:
+        if re.search(regra, texto):
+            return ramo
+    return RAMO_OUTROS
+
+
 # ------------------------------------------------------------------ tipo de cadastro
 
 TIPO_EMPRESA = "empresa"
