@@ -521,6 +521,116 @@ def test_vendedor_nao_leva_nem_localiza(cliente_http, token_vendedor):
     assert cliente_http.post("/api/prospectos/localizar", headers=_auth(token_vendedor)).status_code == 403
 
 
+# ------------------------------------------------------------------ conferência automática
+
+def _lista_grande(cliente_http, token, n):
+    linhas = [_linha(f"7{i:013d}", f"Empresa Auto {i} LTDA") for i in range(n)]
+    _enviar(cliente_http, token, _xlsx(linhas), confirmar=True)
+
+
+@pytest.fixture
+def automatico(monkeypatch, db):
+    """Conferência automática que roda na hora e não espera de verdade."""
+    from app.services import conferencia_receita as cr
+    monkeypatch.setattr(cr, "PAUSA_ENTRE_ONDAS", 0)
+    servico = cr.ConferenciaEmSegundoPlano(lambda: db, dormir=lambda s: None, em_thread=False)
+    esperas = []
+    original = servico._esperar
+    servico._esperar = lambda segundos: (esperas.append(segundos), original(segundos))[1]  # anota a espera TOTAL
+    monkeypatch.setattr(cr, "conferencia", servico)
+    servico.esperas = esperas
+    return servico
+
+
+def test_espera_a_receita_liberar_e_continua_ate_acabar(cliente_http, token, db, automatico, monkeypatch):
+    from app.services import conferencia_receita as cr
+    _lista_grande(cliente_http, token, 12)
+    consultadas = []
+
+    def bloqueia_uma_vez(cnpj):
+        consultadas.append(cnpj)
+        if len(consultadas) == 6:      # bloqueia na 6ª consulta, uma única vez (depois "libera")
+            raise cr.LimiteDeUso()
+        return {"situacao": "ATIVA", "socios": ""}
+
+    monkeypatch.setattr(cr, "_consultar", bloqueia_uma_vez)
+    r = cliente_http.post("/api/prospectos/conferir-receita/iniciar", json={"tipo": "empresa"}, headers=_auth(token))
+    assert r.status_code == 200
+
+    e = automatico.estado()
+    assert e["rodando"] is False and e["mensagem"] == "Conferência terminada."
+    assert e["ativas"] == 12 and e["restam"] == 0
+    assert automatico.esperas == [cr.ESPERA_APOS_LIMITE]   # esperou a janela da Receita, uma vez
+    assert db.query(Prospecto).filter(Prospecto.situacao_receita.is_(None), Prospecto.tipo == "empresa").count() == 0
+
+
+def test_bloqueio_seguido_aumenta_a_espera(cliente_http, token, db, automatico, monkeypatch):
+    from app.services import conferencia_receita as cr
+    _lista_grande(cliente_http, token, 4)
+    tentativas = {"n": 0}
+
+    def bloqueia_tres_lotes(cnpj):
+        tentativas["n"] += 1
+        if tentativas["n"] <= 9:       # 3 lotes seguidos sem conseguir nenhuma consulta
+            raise cr.LimiteDeUso()
+        return {"situacao": "ATIVA", "socios": ""}
+
+    monkeypatch.setattr(cr, "_consultar", bloqueia_tres_lotes)
+    cliente_http.post("/api/prospectos/conferir-receita/iniciar", json={"tipo": "empresa"}, headers=_auth(token))
+    assert automatico.esperas[:3] == [60, 90, 120]          # ainda bloqueada na volta: espera mais
+    assert automatico.estado()["ativas"] == 4
+
+
+def test_parar_interrompe_e_guarda_o_que_ja_foi(cliente_http, token, db, receita, automatico):
+    from app.services import conferencia_receita as cr
+    _lista_grande(cliente_http, token, 8)
+    lotes = {"n": 0}
+    original = cr.conferir_lote
+
+    def um_lote_e_para(db_, pendentes):
+        lotes["n"] += 1
+        resultado = original(db_, pendentes[:3])
+        automatico.parar()
+        return resultado
+
+    cr.conferir_lote = um_lote_e_para
+    try:
+        cliente_http.post("/api/prospectos/conferir-receita/iniciar", json={"tipo": "empresa"}, headers=_auth(token))
+    finally:
+        cr.conferir_lote = original
+    e = automatico.estado()
+    assert e["rodando"] is False and e["mensagem"].startswith("Parado") and e["ativas"] == 3
+    assert db.query(Prospecto).filter(Prospecto.situacao_receita == "ATIVA").count() == 3
+
+
+def test_api_fora_do_ar_desiste_em_vez_de_insistir_para_sempre(cliente_http, token, db, automatico, monkeypatch):
+    from app.services import conferencia_receita as cr
+    _lista_grande(cliente_http, token, 3)
+    monkeypatch.setattr(cr, "_consultar", lambda cnpj: None)  # rede fora
+    cliente_http.post("/api/prospectos/conferir-receita/iniciar", json={"tipo": "empresa"}, headers=_auth(token))
+    e = automatico.estado()
+    assert e["rodando"] is False and "não está respondendo" in e["mensagem"] and e["ativas"] == 0
+
+
+def test_iniciar_sem_nada_para_conferir_da_erro_amigavel(cliente_http, token, automatico):
+    r = cliente_http.post("/api/prospectos/conferir-receita/iniciar", json={}, headers=_auth(token))
+    assert r.status_code == 400 and "Não há empresas" in r.json()["detail"]
+
+
+def test_nao_inicia_duas_conferencias_ao_mesmo_tempo(cliente_http, token, com_lista, automatico):
+    automatico._estado["rodando"] = True
+    r = cliente_http.post("/api/prospectos/conferir-receita/iniciar", json={"tipo": "empresa"}, headers=_auth(token))
+    assert r.status_code == 409
+
+
+def test_status_e_parar_so_para_admin(cliente_http, token, token_vendedor, automatico):
+    assert cliente_http.get("/api/prospectos/conferir-receita/status", headers=_auth(token)).json()["rodando"] is False
+    for metodo, url in (("get", "/status"), ("post", "/parar"), ("post", "/iniciar")):
+        r = getattr(cliente_http, metodo)("/api/prospectos/conferir-receita" + url, headers=_auth(token_vendedor),
+                                          **({"json": {}} if metodo == "post" else {}))
+        assert r.status_code == 403
+
+
 # ------------------------------------------------------------------ acesso
 
 def test_exige_login(cliente_http):

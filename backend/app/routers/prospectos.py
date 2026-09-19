@@ -156,3 +156,33 @@ def localizar_novos(
     resultado = geocodificacao.localizar_lote(db)
     db.commit()
     return resultado
+
+
+# ---- conferência automática, em segundo plano (espera a Receita liberar e continua) ----
+
+@router.post("/conferir-receita/iniciar")
+def iniciar_conferencia(
+    filtros: FiltrosConferencia,
+    _admin: Usuario = Depends(auth.requer_admin),
+    db: Session = Depends(get_db),
+):
+    """Confere no servidor TODAS as empresas do filtro que ainda não foram conferidas.
+    Quando a Receita pede para esperar, espera e continua — mesmo com a página fechada."""
+    campos = filtros.model_dump()
+    faltam = svc.pendentes_de_conferencia(db, **campos)
+    if faltam == 0:
+        raise HTTPException(status_code=400, detail="Não há empresas para conferir com esses filtros.")
+    if not conferencia_receita.conferencia.iniciar(campos, restam_inicial=faltam):
+        raise HTTPException(status_code=409, detail="Já existe uma conferência em andamento. Espere terminar ou pare a atual.")
+    return conferencia_receita.conferencia.estado()
+
+
+@router.get("/conferir-receita/status")
+def status_conferencia(_admin: Usuario = Depends(auth.requer_admin)):
+    return conferencia_receita.conferencia.estado()
+
+
+@router.post("/conferir-receita/parar")
+def parar_conferencia(_admin: Usuario = Depends(auth.requer_admin)):
+    conferencia_receita.conferencia.parar()
+    return conferencia_receita.conferencia.estado()

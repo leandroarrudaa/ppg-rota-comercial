@@ -62,6 +62,16 @@ def _consultar(cnpj: str) -> dict | None:
     return {"situacao": situacao, "socios": "; ".join(s for s in socios if s)[:300]}
 
 
+_LIMITE = object()  # marca "a Receita pediu para esperar" dentro de uma onda
+
+
+def _tentar(cnpj: str):
+    try:
+        return _consultar(cnpj)
+    except LimiteDeUso:
+        return _LIMITE
+
+
 def conferir_lote(db: Session, pendentes: list[Prospecto]) -> dict:
     """Consulta a Receita para os prospectos recebidos, dentro do orçamento de
     tempo. Não dá commit: quem chama decide."""
@@ -73,14 +83,13 @@ def conferir_lote(db: Session, pendentes: list[Prospecto]) -> dict:
         if time.monotonic() - inicio > ORCAMENTO_SEGUNDOS:
             break
         onda = pendentes[i:i + PARALELO]
-        try:
-            with ThreadPoolExecutor(max_workers=PARALELO) as pool:
-                respostas = list(pool.map(lambda p: _consultar(p.cnpj), onda))
-        except LimiteDeUso:
-            limite_de_uso = True
-            break
+        with ThreadPoolExecutor(max_workers=PARALELO) as pool:
+            respostas = list(pool.map(lambda p: _tentar(p.cnpj), onda))
 
         for prospecto, resposta in zip(onda, respostas):
+            if resposta is _LIMITE:
+                limite_de_uso = True   # esta fica para depois; as outras da onda valem
+                continue
             if resposta is None:
                 falhas += 1
                 continue
@@ -92,6 +101,8 @@ def conferir_lote(db: Session, pendentes: list[Prospecto]) -> dict:
                 ativas += 1
             else:
                 nao_ativas += 1
+        if limite_de_uso:
+            break  # a Receita pediu para esperar: insistir só prolonga o bloqueio
         time.sleep(PAUSA_ENTRE_ONDAS)
 
     return {
@@ -101,3 +112,150 @@ def conferir_lote(db: Session, pendentes: list[Prospecto]) -> dict:
         "falhas": falhas,
         "limiteDeUso": limite_de_uso,
     }
+
+
+# ====================================================================================
+# Modo automático: confere TUDO em segundo plano, esperando a Receita liberar
+# ====================================================================================
+#
+# A BrasilAPI aceita ~100 consultas por minuto por endereço e depois responde 429
+# ("Too Many Requests") por uns 50 a 60 segundos (medido em 20/09/2026). Em vez de o
+# usuário clicar de novo a cada bloqueio, o servidor mesmo espera e continua até
+# acabar — mesmo com a página fechada. O que já foi conferido fica gravado a cada
+# lote; se o servidor reiniciar (publicação nova), é só iniciar de novo e ele
+# recomeça de onde parou, porque só consulta quem ainda não foi conferido.
+
+import logging
+import threading
+from datetime import datetime as _datetime
+
+log = logging.getLogger(__name__)
+
+LOTE_AUTOMATICO = 45
+ESPERA_APOS_LIMITE = 60        # segundos: um pouco mais que a janela medida (~50-60 s)
+ESPERA_MAXIMA = 180
+FALHAS_SEGUIDAS_PARA_DESISTIR = 6   # rede fora / API caída: para em vez de insistir para sempre
+
+
+class ConferenciaEmSegundoPlano:
+    """Uma conferência por vez (é um serviço só, com uma API pública de cota curta).
+
+    `fabrica_sessao` devolve uma sessão de banco nova; `dormir` existe para os testes
+    não esperarem de verdade; `em_thread=False` roda tudo na hora (também para testes).
+    """
+
+    def __init__(self, fabrica_sessao, dormir=time.sleep, em_thread=True):
+        self._fabrica = fabrica_sessao
+        self._dormir = dormir
+        self._em_thread = em_thread
+        self._trava = threading.Lock()
+        self._parar = threading.Event()
+        self._estado = self._estado_inicial()
+
+    @staticmethod
+    def _estado_inicial() -> dict:
+        return {
+            "rodando": False, "ativas": 0, "naoAtivas": 0, "falhas": 0, "restam": 0,
+            "aguardandoAte": None, "esperaSegundos": 0, "iniciadoEm": None, "terminouEm": None,
+            "mensagem": "",
+        }
+
+    def estado(self) -> dict:
+        with self._trava:
+            e = dict(self._estado)
+        if e["aguardandoAte"] is not None:
+            e["faltamSegundos"] = max(0, int(e["aguardandoAte"] - time.time()))
+        else:
+            e["faltamSegundos"] = 0
+        e.pop("aguardandoAte")
+        return e
+
+    def _atualizar(self, **campos) -> None:
+        with self._trava:
+            self._estado.update(campos)
+
+    def iniciar(self, filtros: dict, restam_inicial: int = 0) -> bool:
+        """False se já tem uma conferência rodando."""
+        with self._trava:
+            if self._estado["rodando"]:
+                return False
+            self._estado = self._estado_inicial()
+            self._estado.update(rodando=True, restam=restam_inicial, iniciadoEm=_datetime.utcnow().isoformat())
+        self._parar.clear()
+        if self._em_thread:
+            threading.Thread(target=self._rodar, args=(filtros,), daemon=True, name="conferencia-receita").start()
+        else:
+            self._rodar(filtros)
+        return True
+
+    def parar(self) -> None:
+        self._parar.set()
+
+    def _esperar(self, segundos: int) -> None:
+        """Espera em pedaços de 1 s, para o Parar valer na hora."""
+        self._atualizar(aguardandoAte=time.time() + segundos, esperaSegundos=segundos)  # só para a tela mostrar a contagem
+        for _ in range(segundos):
+            if self._parar.is_set():
+                break
+            self._dormir(1)
+        self._atualizar(aguardandoAte=None, esperaSegundos=0)
+
+    def _rodar(self, filtros: dict) -> None:
+        from . import prospeccao as svc  # aqui dentro: prospeccao também importa este módulo
+
+        espera = ESPERA_APOS_LIMITE
+        falhas_seguidas = 0
+        mensagem = ""
+        try:
+            while not self._parar.is_set():
+                db = self._fabrica()
+                try:
+                    pendentes, total = svc.pendentes_de_conferencia(db, limite=LOTE_AUTOMATICO, **filtros)
+                    if not pendentes:
+                        self._atualizar(restam=0)
+                        mensagem = "Conferência terminada."
+                        break
+                    r = conferir_lote(db, pendentes)
+                    db.commit()  # cada lote fica gravado: reiniciar o servidor não perde o que já foi feito
+                    restam = svc.pendentes_de_conferencia(db, **filtros)
+                finally:
+                    db.close()
+
+                with self._trava:
+                    self._estado["ativas"] += r["ativas"]
+                    self._estado["naoAtivas"] += r["naoAtivas"]
+                    self._estado["falhas"] += r["falhas"]
+                    self._estado["restam"] = restam
+
+                if r["limiteDeUso"]:
+                    # a Receita pediu para esperar; se ainda estiver bloqueada na volta, espera mais
+                    self._esperar(espera)
+                    espera = espera + 30 if r["processados"] == 0 else ESPERA_APOS_LIMITE
+                    espera = min(espera, ESPERA_MAXIMA)
+                    falhas_seguidas = 0
+                elif r["processados"] == 0 and r["falhas"] > 0:
+                    falhas_seguidas += 1
+                    if falhas_seguidas >= FALHAS_SEGUIDAS_PARA_DESISTIR:
+                        mensagem = "A Receita não está respondendo. Tente de novo mais tarde; o que já foi conferido ficou gravado."
+                        break
+                    self._esperar(10)
+                else:
+                    falhas_seguidas = 0
+                    espera = ESPERA_APOS_LIMITE
+            else:
+                mensagem = "Parado. O que já foi conferido ficou gravado."
+        except Exception:  # nunca deixar a tarefa de fundo morrer em silêncio
+            log.exception("Falha na conferência em segundo plano")
+            mensagem = "Deu um erro inesperado. O que já foi conferido ficou gravado; é só iniciar de novo."
+        finally:
+            self._atualizar(rodando=False, aguardandoAte=None, esperaSegundos=0,
+                            terminouEm=_datetime.utcnow().isoformat(), mensagem=mensagem)
+
+
+def _fabrica_padrao():
+    from ..database import SessaoLocal
+    return SessaoLocal()
+
+
+# instância única do serviço (os testes trocam por uma própria)
+conferencia = ConferenciaEmSegundoPlano(_fabrica_padrao)

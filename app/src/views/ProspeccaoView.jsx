@@ -77,7 +77,6 @@ export default function ProspeccaoView() {
   // sobe a cada importação: faz a tabela recarregar mesmo quando nenhum filtro mudou
   const [versaoLista, setVersaoLista] = useState(0);
   const [conferencia, setConferencia] = useState(null); // { rodando, ativas, naoAtivas, falhas, restam, mensagem }
-  const pararRef = useRef(false);
   const [selecionados, setSelecionados] = useState(() => new Map()); // id -> nome
   const [levando, setLevando] = useState(null); // { fase, criados, localizados, semLocal, restam, mensagem }
 
@@ -125,35 +124,50 @@ export default function ProspeccaoView() {
     return () => clearTimeout(t);
   }, [carregar, versaoLista]);
 
-  // Confere na Receita as empresas que a tela está mostrando e que ainda não foram
-  // conferidas, um lote por vez — o servidor faz o que cabe num orçamento de
-  // tempo e diz quantas faltam; a tela chama de novo até zerar (ou até o Parar).
+  // Confere na Receita, NO SERVIDOR, todas as empresas do filtro que ainda não foram
+  // conferidas. A Receita aceita ~100 consultas por minuto; quando pede para esperar, o
+  // servidor espera e continua sozinho — pode fechar a página. Aqui só acompanhamos.
+  const consultarStatus = useCallback(
+    () => api.get("/api/prospectos/conferir-receita/status").then(setConferencia).catch(() => {}),
+    []
+  );
+
+  useEffect(() => { consultarStatus(); }, [consultarStatus]);
+
+  const conferindo = Boolean(conferencia?.rodando);
+  useEffect(() => {
+    if (!conferindo) return undefined;
+    const t = setInterval(consultarStatus, 3000);
+    return () => clearInterval(t);
+  }, [conferindo, consultarStatus]);
+
+  // quando a conferência termina (ou é parada), atualiza a lista: quem fechou some
+  const estavaConferindo = useRef(false);
+  useEffect(() => {
+    if (estavaConferindo.current && !conferindo) { carregar(); carregarResumo(); }
+    estavaConferindo.current = conferindo;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conferindo]);
+
   async function conferirNaReceita() {
-    pararRef.current = false;
-    let ativas = 0, naoAtivas = 0, falhas = 0, restam = dados?.pendentesConferencia ?? 0;
-    setConferencia({ rodando: true, ativas, naoAtivas, falhas, restam, mensagem: "" });
     setErro("");
-    let mensagem = "";
     try {
-      for (;;) {
-        const corpo = {
-          cidade: cidade || null, ramo: filtros.ramo || null, tipo: filtros.tipo || null,
-          porte: filtros.porte || null, busca: filtros.busca.trim().length >= 2 ? filtros.busca.trim() : null,
-          nota_min: filtros.notaMin > 0 ? filtros.notaMin : null,
-        };
-        const r = await api.post("/api/prospectos/conferir-receita", corpo);
-        ativas += r.ativas; naoAtivas += r.naoAtivas; falhas += r.falhas; restam = r.restam;
-        setConferencia({ rodando: true, ativas, naoAtivas, falhas, restam, mensagem: "" });
-        if (r.limiteDeUso) { mensagem = "A Receita pediu para esperar um pouco (limite de uso). Tente de novo em alguns minutos."; break; }
-        if (r.processados === 0 && r.falhas > 0) { mensagem = "A Receita não respondeu agora. Tente de novo em instantes."; break; }
-        if (r.restam === 0 || pararRef.current) break;
-      }
+      const corpo = {
+        cidade: cidade || null, ramo: filtros.ramo || null, tipo: filtros.tipo || null,
+        porte: filtros.porte || null, busca: filtros.busca.trim().length >= 2 ? filtros.busca.trim() : null,
+        nota_min: filtros.notaMin > 0 ? filtros.notaMin : null,
+      };
+      setConferencia(await api.post("/api/prospectos/conferir-receita/iniciar", corpo));
     } catch (e) {
-      mensagem = e.message;
-    } finally {
-      setConferencia({ rodando: false, ativas, naoAtivas, falhas, restam, mensagem });
-      carregar();
-      carregarResumo();
+      setErro(e.message);
+    }
+  }
+
+  async function pararConferencia() {
+    try {
+      setConferencia(await api.post("/api/prospectos/conferir-receita/parar", {}));
+    } catch (e) {
+      setErro(e.message);
     }
   }
 
@@ -428,14 +442,14 @@ export default function ProspeccaoView() {
                 >
                   Levar todas as confirmadas
                 </button>
-                {conferencia?.rodando ? (
-                  <button className="btn btn-ghost" onClick={() => { pararRef.current = true; }}>Parar</button>
+                {conferindo ? (
+                  <button className="btn btn-ghost" onClick={pararConferencia}>Parar conferência</button>
                 ) : (
                   <button
                     className="btn btn-primary"
                     disabled={!dados || dados.pendentesConferencia === 0}
                     onClick={conferirNaReceita}
-                    title="Consulta a Receita para as empresas desta lista que ainda não foram conferidas"
+                    title="Consulta a Receita para todas as empresas desta lista que ainda não foram conferidas. Roda no servidor e espera a Receita liberar quando ela pede."
                   >
                     Conferir na Receita
                   </button>
@@ -454,14 +468,17 @@ export default function ProspeccaoView() {
               </div>
             )}
 
-            {conferencia && (
+            {conferencia && (conferencia.rodando || conferencia.iniciadoEm) && (
               <div className="carteira-aviso">
-                {conferencia.rodando ? "Conferindo na Receita… " : "Conferência terminada. "}
+                {conferencia.rodando
+                  ? (conferencia.faltamSegundos > 0
+                    ? `A Receita pediu para esperar — retoma em ${conferencia.faltamSegundos}s. `
+                    : "Conferindo na Receita… ")
+                  : `${conferencia.mensagem || "Conferência terminada."} `}
                 <b>{n(conferencia.ativas)}</b> ativas, <b>{n(conferencia.naoAtivas)}</b> fechadas
                 {conferencia.falhas > 0 && `, ${n(conferencia.falhas)} sem resposta (ficam para a próxima)`}
                 {" · "}faltam {n(conferencia.restam)}.
-                {conferencia.rodando && " Não feche esta página."}
-                {conferencia.mensagem && <div style={{ marginTop: 4 }}>{conferencia.mensagem}</div>}
+                {conferencia.rodando && " Pode fechar esta página: o servidor continua sozinho e o que já foi conferido fica gravado."}
               </div>
             )}
 
