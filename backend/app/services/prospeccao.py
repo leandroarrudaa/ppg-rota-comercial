@@ -30,6 +30,8 @@ _ORDENAVEIS = {
     "cidade": Prospecto.cidade,
     "telefone": Prospecto.telefone,
     "situacaoLista": Prospecto.situacao_lista,
+    "situacaoReceita": Prospecto.situacao_receita,
+    "socios": Prospecto.socios,
     "status": Prospecto.status,
 }
 
@@ -131,18 +133,43 @@ def _cnpjs_clientes_sql():
     return select(limpo).where(Cliente.cnpj.isnot(None))
 
 
-def _base(db: Session, cidade: str | None, incluir_clientes: bool = False):
+def _condicao_situacao(situacao: str):
+    """Filtro pela situação NA RECEITA (não a que vem escrita no arquivo).
+
+    ""  (padrão)   ativas + ainda não conferidas — o que "vale mostrar"
+    "ativa"        só as que a Receita confirmou como ativas
+    "nao_conferida" ainda sem consulta
+    "nao_ativa"    baixadas, inaptas, suspensas e não encontradas — o que fica escondido
+    "todas"        sem filtro
+    """
+    sr = Prospecto.situacao_receita
+    if situacao == "todas":
+        return None
+    if situacao == "ativa":
+        return sr == "ATIVA"
+    if situacao == "nao_conferida":
+        return sr.is_(None)
+    if situacao == "nao_ativa":
+        return sr.isnot(None) & (sr != "ATIVA")
+    return sr.is_(None) | (sr == "ATIVA")
+
+
+def _base(db: Session, cidade: str | None, incluir_clientes: bool = False, situacao: str = ""):
     """Prospectos que valem ser mostrados.
 
     Fora, sempre: quem é cliente (inclusive o inativo — empresa que fechou não é
     alvo de prospecção) e o que a equipe descartou. A checagem é feita AGORA,
     contra o cadastro, e não pela marca `ja_cliente` gravada na importação:
     quem foi cadastrado ou inativado depois da importação sai da lista na hora,
-    sem esperar uma nova importação.
+    sem esperar uma nova importação. Por padrão também fica de fora quem a
+    Receita já confirmou que NÃO está ativa (ver `_condicao_situacao`).
     """
     q = db.query(Prospecto).filter(Prospecto.status != StatusProspecto.DESCARTADO)
     if not incluir_clientes:
         q = q.filter(Prospecto.cnpj.not_in(_cnpjs_clientes_sql()))
+    condicao = _condicao_situacao(situacao)
+    if condicao is not None:
+        q = q.filter(condicao)
     if cidade:
         q = q.filter(Prospecto.cidade == cidade.strip().upper())
     return q
@@ -150,8 +177,9 @@ def _base(db: Session, cidade: str | None, incluir_clientes: bool = False):
 
 def resumo(db: Session, cidade: str | None = None) -> dict:
     """Números para a tela: tamanho da lista, e o que sobra por ramo depois de
-    tirar quem já é cliente. Filtrar por cidade vale para tudo, menos para a
-    lista de cidades (senão não dá para trocar de cidade)."""
+    tirar quem já é cliente e quem a Receita disse que fechou. Filtrar por
+    cidade vale para tudo, menos para a lista de cidades (senão não dá para
+    trocar de cidade)."""
     total_lista = db.query(func.count(Prospecto.id)).scalar() or 0
     ja_clientes = (
         db.query(func.count(Prospecto.id)).filter(Prospecto.cnpj.in_(_cnpjs_clientes_sql())).scalar() or 0
@@ -162,6 +190,7 @@ def resumo(db: Session, cidade: str | None = None) -> dict:
         for c, n in db.query(Prospecto.cidade, func.count(Prospecto.id))
         .filter(Prospecto.status != StatusProspecto.DESCARTADO)
         .filter(Prospecto.cnpj.not_in(_cnpjs_clientes_sql()))
+        .filter(_condicao_situacao(""))
         .group_by(Prospecto.cidade).order_by(func.count(Prospecto.id).desc())
     ]
 
@@ -191,16 +220,18 @@ def resumo(db: Session, cidade: str | None = None) -> dict:
         "jaClientes": ja_clientes,
         "naCidade": sum(r["total"] for r in ramos),
         "empresasNaCidade": sum(r["empresas"] for r in ramos),
+        # fechadas segundo a Receita: ficam escondidas, mas a conta aparece
+        "escondidasNaoAtivas": _base(db, cidade, situacao="nao_ativa").count(),
+        "confirmadasAtivas": _base(db, cidade, situacao="ativa").count(),
         "cidades": cidades,
         "ramos": ramos,
     }
 
 
-def listar(
-    db: Session, *, cidade=None, ramo=None, tipo=None, porte=None, status=None, busca=None,
-    ordenar="razaoSocial", direcao="asc", pagina=1, tamanho=50,
-) -> tuple[list[Prospecto], int]:
-    q = _base(db, cidade)
+def filtrar(
+    db: Session, *, cidade=None, ramo=None, tipo=None, porte=None, status=None, busca=None, situacao="",
+):
+    q = _base(db, cidade, situacao=situacao)
     if ramo:
         q = q.filter(Prospecto.ramo == ramo)
     if tipo:
@@ -216,6 +247,13 @@ def listar(
             Prospecto.cnpj.ilike(f"%{normalizar_cnpj(busca) or busca.strip()}%"),
             Prospecto.bairro.ilike(termo),
         ))
+    return q
+
+
+def listar(
+    db: Session, *, ordenar="razaoSocial", direcao="asc", pagina=1, tamanho=50, **filtros,
+) -> tuple[list[Prospecto], int]:
+    q = filtrar(db, **filtros)
     total = q.count()
     coluna = _ORDENAVEIS.get(ordenar, Prospecto.razao_social)
     ordem = coluna.desc() if direcao == "desc" else coluna.asc()
@@ -224,6 +262,18 @@ def listar(
     q = q.order_by(coluna.is_(None), ordem, Prospecto.id)
     itens = q.offset((pagina - 1) * tamanho).limit(tamanho).all()
     return itens, total
+
+
+def pendentes_de_conferencia(db: Session, limite: int | None = None, **filtros):
+    """Os que o filtro mostra e a Receita ainda não conferiu — os de maior capital
+    primeiro, que são os que mais interessam."""
+    filtros["situacao"] = "nao_conferida"
+    q = filtrar(db, **filtros)
+    total = q.count()
+    if limite is None:
+        return total
+    lista = q.order_by(Prospecto.capital_social.is_(None), Prospecto.capital_social.desc(), Prospecto.id).limit(limite).all()
+    return lista, total
 
 
 def para_saida(p: Prospecto) -> dict:
@@ -244,6 +294,9 @@ def para_saida(p: Prospecto) -> dict:
         "telefone": p.telefone,
         "email": p.email,
         "situacaoLista": p.situacao_lista,
+        "situacaoReceita": p.situacao_receita,
+        "verificadoEm": p.verificado_em.isoformat() if p.verificado_em else None,
+        "socios": p.socios,
         "status": p.status.value if p.status else None,
         "lote": p.lote,
     }

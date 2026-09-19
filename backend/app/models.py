@@ -397,6 +397,12 @@ class Prospecto(Base):
     ja_cliente: Mapped[bool] = mapped_column(Boolean, default=False)
     lote: Mapped[str | None] = mapped_column(String(255))  # nome do arquivo da última importação
 
+    # ------- conferência na Receita (BrasilAPI) — também não é sobrescrita pela lista -------
+    # ATIVA | BAIXADA | INAPTA | SUSPENSA | NAO_ENCONTRADO; nulo = ainda não conferida
+    situacao_receita: Mapped[str | None] = mapped_column(String(30))
+    verificado_em: Mapped[datetime | None] = mapped_column(DateTime)
+    socios: Mapped[str | None] = mapped_column(String(300))  # até 3 nomes, quem provavelmente decide
+
     # ------- donos do app (nunca sobrescritos na reimportação) -------
     status: Mapped[StatusProspecto] = mapped_column(Enum(StatusProspecto), default=StatusProspecto.NOVO)
     motivo_descarte: Mapped[str | None] = mapped_column(String(200))

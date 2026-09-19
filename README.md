@@ -120,8 +120,14 @@ planilha de CNPJs (por exemplo, a extração da Receita por DDD). Fica numa tabe
   dos clientes ouro. **MEI / autônomo** é identificado pelo nome (CPF escrito no nome, ou nome de
   pessoa sem forma jurídica) — é uma heurística, não a natureza jurídica oficial.
 - **Cidade:** a lista começa filtrada em Ponta Grossa e tem seletor de cidade.
-- A situação que aparece ("ATIVA") vem do arquivo, que é uma foto antiga. A conferência na Receita
-  ainda é uma etapa à parte (ver abaixo).
+- **Conferir na Receita:** a lista diz "ATIVA" para todo mundo, mas é uma foto antiga. O botão
+  **Conferir na Receita** consulta a BrasilAPI para as empresas que a tela está mostrando (respeita
+  os filtros de cidade, ramo, tipo e porte) e grava a situação e os sócios. Quem a Receita mostrar
+  como baixada, inapta, suspensa ou inexistente **some da lista** (dá para ver pelo filtro
+  "Fechadas / inaptas"). Roda em lotes pelo servidor, com a página aberta, e pode ser parado e
+  retomado — só consulta quem ainda não foi conferido. Se a API falhar, a empresa fica para a
+  próxima em vez de ser marcada como fechada. Dica: filtre por ramo antes, para conferir só o que interessa.
+- Reimportar a lista **não apaga** a conferência já feita.
 
 ## Prospecção: situação cadastral dos CNPJs
 

@@ -311,6 +311,121 @@ def test_prospecto_descartado_nao_aparece(cliente_http, token, db):
     assert resumo["naCidade"] == 2  # Alfa e o MEI; a Beta foi descartada
 
 
+# ------------------------------------------------------------------ conferência na Receita
+
+@pytest.fixture
+def receita(monkeypatch):
+    """Simula a BrasilAPI: o teste define a resposta de cada CNPJ (nada de internet)."""
+    from app.services import conferencia_receita as cr
+    monkeypatch.setattr(cr, "PAUSA_ENTRE_ONDAS", 0)
+    respostas = {}
+    chamadas = []
+
+    def falso(cnpj):
+        chamadas.append(cnpj)
+        valor = respostas.get(cnpj, {"situacao": "ATIVA", "socios": ""})
+        if isinstance(valor, Exception):
+            raise valor
+        return valor
+
+    monkeypatch.setattr(cr, "_consultar", falso)
+    falso.respostas, falso.chamadas = respostas, chamadas
+    return falso
+
+
+def _conferir(cliente_http, token, **filtros):
+    return cliente_http.post("/api/prospectos/conferir-receita", json=filtros, headers=_auth(token))
+
+
+def test_empresa_que_fechou_some_da_lista_e_aparece_na_conta(cliente_http, token, com_lista, receita):
+    receita.respostas["20000000000102"] = {"situacao": "BAIXADA", "socios": ""}
+    r = _conferir(cliente_http, token, cidade="PONTA GROSSA", tipo="empresa")
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["processados"] == 2 and corpo["ativas"] == 1 and corpo["naoAtivas"] == 1
+    assert corpo["restam"] == 0
+
+    lista = cliente_http.get("/api/prospectos?tipo=empresa", headers=_auth(token)).json()
+    assert "Serralheria Beta LTDA" not in {i["razaoSocial"] for i in lista["itens"]}
+    resumo = cliente_http.get("/api/prospectos/resumo?cidade=PONTA GROSSA", headers=_auth(token)).json()
+    assert resumo["escondidasNaoAtivas"] == 1 and resumo["confirmadasAtivas"] == 1
+
+
+def test_da_para_ver_as_fechadas_pelo_filtro_de_situacao(cliente_http, token, com_lista, receita):
+    receita.respostas["20000000000102"] = {"situacao": "INAPTA", "socios": ""}
+    _conferir(cliente_http, token, tipo="empresa")
+    r = cliente_http.get("/api/prospectos?situacao=nao_ativa", headers=_auth(token)).json()
+    assert [(i["razaoSocial"], i["situacaoReceita"]) for i in r["itens"]] == [("Serralheria Beta LTDA", "INAPTA")]
+
+
+def test_confere_so_o_que_o_filtro_mostra(cliente_http, token, com_lista, receita):
+    _conferir(cliente_http, token, cidade="CURITIBA")
+    assert receita.chamadas == ["40000000000104"]
+    r = cliente_http.get("/api/prospectos/resumo?cidade=PONTA GROSSA", headers=_auth(token)).json()
+    assert r["confirmadasAtivas"] == 0  # Ponta Grossa não foi tocada
+
+
+def test_falha_de_rede_nao_marca_como_conferida_nem_esconde(cliente_http, token, com_lista, receita):
+    receita.respostas["20000000000102"] = None  # rede fora
+    corpo = _conferir(cliente_http, token, tipo="empresa").json()
+    assert corpo["falhas"] == 1 and corpo["restam"] == 1
+    lista = cliente_http.get("/api/prospectos?tipo=empresa", headers=_auth(token)).json()
+    assert "Serralheria Beta LTDA" in {i["razaoSocial"] for i in lista["itens"]}
+
+
+def test_limite_de_uso_da_api_interrompe_sem_perder_nada(cliente_http, token, com_lista, receita):
+    from app.services.conferencia_receita import LimiteDeUso
+    for cnpj in ("10000000000101", "20000000000102", "40000000000104"):
+        receita.respostas[cnpj] = LimiteDeUso()
+    corpo = _conferir(cliente_http, token, tipo="empresa").json()
+    assert corpo["limiteDeUso"] is True and corpo["processados"] == 0
+
+
+def test_guarda_os_socios(cliente_http, token, com_lista, receita, db):
+    receita.respostas["10000000000101"] = {"situacao": "ATIVA", "socios": "MARIA SOUZA; JOSE LIMA"}
+    _conferir(cliente_http, token, cidade="PONTA GROSSA", tipo="empresa")
+    assert db.query(Prospecto).filter_by(cnpj="10000000000101").one().socios == "MARIA SOUZA; JOSE LIMA"
+
+
+def test_reimportar_nao_apaga_a_conferencia(cliente_http, token, com_lista, receita, db):
+    receita.respostas["20000000000102"] = {"situacao": "BAIXADA", "socios": ""}
+    _conferir(cliente_http, token, tipo="empresa")
+    _enviar(cliente_http, token, _xlsx(LISTA), confirmar=True)  # a lista continua dizendo ATIVA
+    db.expire_all()
+    p = db.query(Prospecto).filter_by(cnpj="20000000000102").one()
+    assert p.situacao_receita == "BAIXADA" and p.situacao_lista == "ATIVA"
+
+
+def test_vendedor_nao_confere(cliente_http, token_vendedor):
+    r = cliente_http.post("/api/prospectos/conferir-receita", json={}, headers=_auth(token_vendedor))
+    assert r.status_code == 403
+
+
+def test_resposta_da_brasilapi_vira_situacao_e_socios(monkeypatch):
+    """A tradução da resposta real da API, sem internet."""
+    from app.services import conferencia_receita as cr
+
+    class Resp:
+        def __init__(self, codigo, corpo=None):
+            self.status_code, self._corpo = codigo, corpo or {}
+
+        def json(self):
+            return self._corpo
+
+    monkeypatch.setattr(cr.requests, "get", lambda *a, **k: Resp(200, {
+        "descricao_situacao_cadastral": "Baixada", "qsa": [{"nome_socio": "ANA PEREIRA"}, {"nome_socio": ""}]}))
+    assert cr._consultar("10000000000101") == {"situacao": "BAIXADA", "socios": "ANA PEREIRA"}
+    monkeypatch.setattr(cr.requests, "get", lambda *a, **k: Resp(404))
+    assert cr._consultar("10000000000101")["situacao"] == cr.NAO_ENCONTRADO
+    monkeypatch.setattr(cr.requests, "get", lambda *a, **k: Resp(400))  # CNPJ com dígito verificador inválido
+    assert cr._consultar("10000000000101")["situacao"] == cr.NAO_ENCONTRADO
+    monkeypatch.setattr(cr.requests, "get", lambda *a, **k: Resp(500))
+    assert cr._consultar("10000000000101") is None
+    monkeypatch.setattr(cr.requests, "get", lambda *a, **k: Resp(429))
+    with pytest.raises(cr.LimiteDeUso):
+        cr._consultar("10000000000101")
+
+
 # ------------------------------------------------------------------ acesso
 
 def test_exige_login(cliente_http):

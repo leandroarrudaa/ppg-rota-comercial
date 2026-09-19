@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { brl, telefoneFmt } from "../lib/format";
 
@@ -16,8 +16,9 @@ const COLUNAS = [
   { campo: "capitalSocial", rotulo: "Capital social", ascPadrao: false, num: true },
   { campo: "bairro", rotulo: "Bairro", ascPadrao: true },
   { campo: "telefone", rotulo: "Telefone", ascPadrao: true },
-  { campo: "situacaoLista", rotulo: "Situação no arquivo", ascPadrao: true,
-    ajuda: "Vem escrita na lista, que é uma foto antiga. Ainda não foi conferida na Receita." },
+  { campo: "situacaoReceita", rotulo: "Receita", ascPadrao: true,
+    ajuda: "Situação conferida na Receita. \"Não conferida\" = ainda não consultamos (a lista diz ATIVA para todos, mas é uma foto antiga)." },
+  { campo: "socios", rotulo: "Sócios", ascPadrao: true, ajuda: "Quem provavelmente decide a compra (vem da Receita)" },
 ];
 
 const COLUNAS_RAMOS = [
@@ -29,7 +30,16 @@ const COLUNAS_RAMOS = [
   { campo: "total", rotulo: "Total com MEI", num: true },
 ];
 
-const FILTROS_INICIAIS = { busca: "", ramo: "", tipo: "empresa", porte: "", ordenar: "capitalSocial", direcao: "desc" };
+const FILTROS_INICIAIS = {
+  busca: "", ramo: "", tipo: "empresa", porte: "", situacao: "", ordenar: "capitalSocial", direcao: "desc",
+};
+
+function SituacaoReceita({ valor }) {
+  if (!valor) return <span className="faint">não conferida</span>;
+  if (valor === "ATIVA") return <span>✓ Ativa</span>;
+  const rotulo = valor === "NAO_ENCONTRADO" ? "Não encontrada" : valor.charAt(0) + valor.slice(1).toLowerCase();
+  return <span className="chip chip-risk">{rotulo}</span>;
+}
 
 const n = (v) => (v ?? 0).toLocaleString("pt-BR");
 
@@ -61,6 +71,8 @@ export default function ProspeccaoView() {
   const [erro, setErro] = useState("");
   const [mostrarImportar, setMostrarImportar] = useState(false);
   const [ordemRamos, setOrdemRamos] = useState({ campo: "empresas", direcao: "desc" });
+  const [conferencia, setConferencia] = useState(null); // { rodando, ativas, naoAtivas, falhas, restam, mensagem }
+  const pararRef = useRef(false);
 
   const carregarResumo = useCallback(() => {
     api.get(`/api/prospectos/resumo?cidade=${encodeURIComponent(cidade)}`)
@@ -91,6 +103,7 @@ export default function ProspeccaoView() {
     if (filtros.ramo) params.set("ramo", filtros.ramo);
     if (filtros.tipo) params.set("tipo", filtros.tipo);
     if (filtros.porte) params.set("porte", filtros.porte);
+    if (filtros.situacao) params.set("situacao", filtros.situacao);
     if (filtros.busca.trim().length >= 2) params.set("busca", filtros.busca.trim());
     api.get(`/api/prospectos?${params}`)
       .then(setDados)
@@ -103,6 +116,37 @@ export default function ProspeccaoView() {
     const t = setTimeout(carregar, 300);
     return () => clearTimeout(t);
   }, [carregar]);
+
+  // Confere na Receita as empresas que a tela está mostrando e que ainda não foram
+  // conferidas, um lote por vez — o servidor faz o que cabe num orçamento de
+  // tempo e diz quantas faltam; a tela chama de novo até zerar (ou até o Parar).
+  async function conferirNaReceita() {
+    pararRef.current = false;
+    let ativas = 0, naoAtivas = 0, falhas = 0, restam = dados?.pendentesConferencia ?? 0;
+    setConferencia({ rodando: true, ativas, naoAtivas, falhas, restam, mensagem: "" });
+    setErro("");
+    let mensagem = "";
+    try {
+      for (;;) {
+        const corpo = {
+          cidade: cidade || null, ramo: filtros.ramo || null, tipo: filtros.tipo || null,
+          porte: filtros.porte || null, busca: filtros.busca.trim().length >= 2 ? filtros.busca.trim() : null,
+        };
+        const r = await api.post("/api/prospectos/conferir-receita", corpo);
+        ativas += r.ativas; naoAtivas += r.naoAtivas; falhas += r.falhas; restam = r.restam;
+        setConferencia({ rodando: true, ativas, naoAtivas, falhas, restam, mensagem: "" });
+        if (r.limiteDeUso) { mensagem = "A Receita pediu para esperar um pouco (limite de uso). Tente de novo em alguns minutos."; break; }
+        if (r.processados === 0 && r.falhas > 0) { mensagem = "A Receita não respondeu agora. Tente de novo em instantes."; break; }
+        if (r.restam === 0 || pararRef.current) break;
+      }
+    } catch (e) {
+      mensagem = e.message;
+    } finally {
+      setConferencia({ rodando: false, ativas, naoAtivas, falhas, restam, mensagem });
+      carregar();
+      carregarResumo();
+    }
+  }
 
   function mudarFiltro(campo, valor) {
     setFiltros((f) => ({ ...f, [campo]: valor }));
@@ -159,9 +203,9 @@ export default function ProspeccaoView() {
       <div className="gestao-cabecalho">
         <h3 style={{ margin: 0 }}>Prospecção</h3>
         <p className="muted" style={{ fontSize: 13 }}>
-          Empresas que ainda não são clientes, vindas da lista importada. A situação que aparece vem do
-          próprio arquivo (uma foto antiga): <b>ainda não foi conferida na Receita</b>, então parte dessas
-          empresas pode já ter fechado.
+          Empresas que ainda não são clientes, vindas da lista importada. A lista é uma foto antiga e diz
+          "ativa" para todo mundo: use <b>Conferir na Receita</b> para saber quem ainda existe. Quem a
+          Receita mostrar como fechada some da lista.
         </p>
       </div>
 
@@ -265,6 +309,12 @@ export default function ProspeccaoView() {
                 <option value="Pequena">Pequena</option>
                 <option value="Demais">Média/grande (Demais)</option>
               </select>
+              <select className="input" value={filtros.situacao} onChange={(e) => mudarFiltro("situacao", e.target.value)}>
+                <option value="">Ativas e não conferidas</option>
+                <option value="ativa">Só confirmadas ativas</option>
+                <option value="nao_conferida">Ainda não conferidas</option>
+                <option value="nao_ativa">Fechadas / inaptas (escondidas)</option>
+              </select>
               <select className="input" value={filtros.ramo} onChange={(e) => mudarFiltro("ramo", e.target.value)}>
                 <option value="">Todos os ramos</option>
                 {(resumo.ramos || []).map((r) => <option key={r.ramo} value={r.ramo}>{r.ramo}</option>)}
@@ -277,8 +327,34 @@ export default function ProspeccaoView() {
             <div className="carteira-barra">
               <span className="muted" style={{ fontSize: 13 }}>
                 {carregando ? "Carregando…" : `${n(total)} ${total === 1 ? "empresa" : "empresas"}`}
+                {dados && !carregando && ` · ${n(dados.pendentesConferencia)} ainda não conferidas na Receita`}
               </span>
+              <div className="carteira-acoes">
+                {conferencia?.rodando ? (
+                  <button className="btn btn-ghost" onClick={() => { pararRef.current = true; }}>Parar</button>
+                ) : (
+                  <button
+                    className="btn btn-primary"
+                    disabled={!dados || dados.pendentesConferencia === 0}
+                    onClick={conferirNaReceita}
+                    title="Consulta a Receita para as empresas desta lista que ainda não foram conferidas"
+                  >
+                    Conferir na Receita
+                  </button>
+                )}
+              </div>
             </div>
+
+            {conferencia && (
+              <div className="carteira-aviso">
+                {conferencia.rodando ? "Conferindo na Receita… " : "Conferência terminada. "}
+                <b>{n(conferencia.ativas)}</b> ativas, <b>{n(conferencia.naoAtivas)}</b> fechadas
+                {conferencia.falhas > 0 && `, ${n(conferencia.falhas)} sem resposta (ficam para a próxima)`}
+                {" · "}faltam {n(conferencia.restam)}.
+                {conferencia.rodando && " Não feche esta página."}
+                {conferencia.mensagem && <div style={{ marginTop: 4 }}>{conferencia.mensagem}</div>}
+              </div>
+            )}
 
             <div className="carteira-tabela-wrap">
               <table className="carteira-tabela">
@@ -312,7 +388,8 @@ export default function ProspeccaoView() {
                       <td className="num">{p.capitalSocial != null ? brl(p.capitalSocial) : "—"}</td>
                       <td>{p.bairro || "—"}{!cidade && p.cidade ? <div className="faint" style={{ fontSize: 12 }}>{p.cidade}</div> : null}</td>
                       <td>{p.telefone ? telefoneFmt(p.telefone) : "—"}</td>
-                      <td>{p.situacaoLista || "—"}</td>
+                      <td><SituacaoReceita valor={p.situacaoReceita} /></td>
+                      <td style={{ fontSize: 12 }}>{p.socios || "—"}</td>
                     </tr>
                   ))}
                 </tbody>

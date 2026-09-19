@@ -92,6 +92,10 @@ _COLUNAS_NOVAS = [
     # existentes com esse valor ao acrescentar a coluna — sem isso, toda
     # visita registrada antes desta mudança ficaria com tipo nulo.
     ("visitas", "tipo", "VARCHAR(20) DEFAULT 'presencial'"),
+    # conferência de prospectos na Receita — a tabela já existia em produção
+    ("prospectos", "situacao_receita", "VARCHAR(30)"),
+    ("prospectos", "verificado_em", "TIMESTAMP"),
+    ("prospectos", "socios", "VARCHAR(300)"),
 ]
 
 
