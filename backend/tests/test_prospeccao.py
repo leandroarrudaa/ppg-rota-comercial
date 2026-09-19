@@ -217,10 +217,7 @@ def test_quem_virou_cliente_deixa_de_aparecer_como_prospecto(cliente_http, token
     db.add(Cliente(cnpj="20.000.000/0001-02", nome="Serralheria Beta LTDA", origem=OrigemCliente.ANTIGO))
     db.commit()
 
-    # qualquer nova importação refaz a marca em TODOS os prospectos
-    _enviar(cliente_http, token, _xlsx([_linha("50000000000105", "Outra Empresa LTDA")]), confirmar=True)
-    db.expire_all()
-    assert db.query(Prospecto).filter_by(cnpj="20000000000102").one().ja_cliente is True
+    # sem importar de novo: a exclusão é feita ao vivo contra o cadastro
     itens, _ = svc.listar(db)
     assert "20000000000102" not in {p.cnpj for p in itens}
 

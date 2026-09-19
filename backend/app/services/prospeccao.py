@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections import Counter
 
 from sqlalchemy import Integer, case, cast, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as insert_pg
+from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 from sqlalchemy.orm import Session
 
 from ..models import Cliente, Prospecto, StatusProspecto
@@ -17,7 +19,10 @@ from .cnpj import normalizar_cnpj
 from .fontes.lista_prospectos import LinhaLista, ListaLida
 from .ramos import TIPO_EMPRESA, TIPO_MEI, classificar_tipo, normalizar_porte, ramo_por_cnae
 
-_LOTE_SQL = 500  # tamanho dos blocos em consultas com IN (...)
+# Linhas por comando de gravação. Postgres aceita 65 mil parâmetros por comando (1.000 x ~19 colunas = 19 mil);
+# o SQLite de desenvolvimento, em versões antigas, só 999 — fica com um bloco menor.
+_BLOCO_POSTGRES = 1000
+_BLOCO_SQLITE = 400
 
 # Colunas que a listagem aceita para ordenar (nada vem direto da URL).
 _ORDENAVEIS = {
@@ -64,30 +69,46 @@ def _campos_da_lista(linha: LinhaLista, arquivo: str | None, clientes: set[str])
     }
 
 
+def _gravar_em_blocos(db: Session, linhas: list[dict]) -> None:
+    """Grava as linhas com UPSERT (insere o CNPJ novo, atualiza o que já existe),
+    em blocos (ver _BLOCO_*).
+
+    Por que não `bulk_insert_mappings`: ele quebra as linhas em grupos pelas
+    colunas que estão vazias, e uma lista real vira mais de mil comandos
+    separados. Com o banco a centenas de milissegundos de distância isso leva
+    minutos e o servidor derruba a requisição (visto em produção). Aqui todas
+    as linhas têm as mesmas colunas, então são ~13 comandos para 12 mil linhas.
+
+    No conflito, só as colunas que vêm da lista são atualizadas — status,
+    motivo, observação e a conferência da Receita nunca são tocados.
+    """
+    if not linhas:
+        return
+    postgres = db.get_bind().dialect.name == "postgresql"
+    inserir = insert_pg if postgres else insert_sqlite
+    bloco = _BLOCO_POSTGRES if postgres else _BLOCO_SQLITE
+    colunas_da_lista = [c for c in linhas[0] if c not in ("cnpj", "status")]
+    for i in range(0, len(linhas), bloco):
+        comando = inserir(Prospecto).values(linhas[i:i + bloco])
+        atualizar = {c: comando.excluded[c] for c in colunas_da_lista}
+        atualizar["atualizado_em"] = func.now()
+        db.execute(comando.on_conflict_do_update(index_elements=["cnpj"], set_=atualizar))
+
+
 def aplicar_lista(db: Session, lista: ListaLida, arquivo: str | None) -> dict:
     """Grava a lista (novos entram, existentes são atualizados) e devolve o resumo.
 
-    Não dá commit: quem chama decide. Usa gravação em bloco — são dezenas de
-    milhares de linhas num banco que fica longe do servidor, uma a uma seria
-    inviável.
+    Não dá commit: quem chama decide.
     """
     clientes = _cnpjs_da_carteira(db)
-    existentes = {cnpj: id_ for id_, cnpj in db.query(Prospecto.id, Prospecto.cnpj)}
+    existentes = {cnpj for (cnpj,) in db.query(Prospecto.cnpj)}
 
     novos, atualizados = [], []
     for linha in lista.linhas:
-        campos = _campos_da_lista(linha, arquivo, clientes)
-        if linha.cnpj in existentes:
-            atualizados.append({"id": existentes[linha.cnpj], **campos})
-        else:
-            novos.append({"cnpj": linha.cnpj, "status": StatusProspecto.NOVO, **campos})
+        campos = {"cnpj": linha.cnpj, "status": StatusProspecto.NOVO, **_campos_da_lista(linha, arquivo, clientes)}
+        (atualizados if linha.cnpj in existentes else novos).append(campos)
 
-    if novos:
-        db.bulk_insert_mappings(Prospecto, novos)
-    if atualizados:
-        db.bulk_update_mappings(Prospecto, atualizados)
-    db.flush()
-    _atualizar_ja_clientes(db, clientes)
+    _gravar_em_blocos(db, novos + atualizados)
 
     todos = novos + atualizados
     tipos = Counter(c["tipo"] for c in todos)
@@ -110,18 +131,6 @@ def aplicar_lista(db: Session, lista: ListaLida, arquivo: str | None) -> dict:
                     for k, v in Counter(c["cidade"] for c in todos).most_common(8)],
         "ramos": sorted(ramos.values(), key=lambda r: -r["total"]),
     }
-
-
-def _atualizar_ja_clientes(db: Session, clientes: set[str]) -> None:
-    """Refaz a marca "já é cliente" em TODOS os prospectos, não só nos da lista:
-    quem virou cliente desde a última importação precisa sair da lista de visita."""
-    db.query(Prospecto).update({Prospecto.ja_cliente: False}, synchronize_session=False)
-    lista = sorted(clientes)
-    for i in range(0, len(lista), _LOTE_SQL):
-        bloco = lista[i:i + _LOTE_SQL]
-        db.query(Prospecto).filter(Prospecto.cnpj.in_(bloco)).update(
-            {Prospecto.ja_cliente: True}, synchronize_session=False
-        )
 
 
 # ------------------------------------------------------------------ consulta
