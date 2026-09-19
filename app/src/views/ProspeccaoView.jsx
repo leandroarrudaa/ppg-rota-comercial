@@ -71,6 +71,9 @@ export default function ProspeccaoView() {
   const [erro, setErro] = useState("");
   const [mostrarImportar, setMostrarImportar] = useState(false);
   const [ordemRamos, setOrdemRamos] = useState({ campo: "empresas", direcao: "desc" });
+  const [avisoImportacao, setAvisoImportacao] = useState("");
+  // sobe a cada importação: faz a tabela recarregar mesmo quando nenhum filtro mudou
+  const [versaoLista, setVersaoLista] = useState(0);
   const [conferencia, setConferencia] = useState(null); // { rodando, ativas, naoAtivas, falhas, restam, mensagem }
   const pararRef = useRef(false);
 
@@ -115,7 +118,7 @@ export default function ProspeccaoView() {
   useEffect(() => {
     const t = setTimeout(carregar, 300);
     return () => clearTimeout(t);
-  }, [carregar]);
+  }, [carregar, versaoLista]);
 
   // Confere na Receita as empresas que a tela está mostrando e que ainda não foram
   // conferidas, um lote por vez — o servidor faz o que cabe num orçamento de
@@ -192,9 +195,18 @@ export default function ProspeccaoView() {
   const total = dados?.total || 0;
   const paginas = Math.max(1, Math.ceil(total / TAMANHO_PAGINA));
 
-  // o painel fica aberto de propósito: é nele que aparece o "Importação concluída"
-  function aoImportar() {
+  // Fecha o painel: ele é comprido e, aberto, empurra a lista para baixo da tela —
+  // parece que nada apareceu. O resultado fica numa linha curta no topo.
+  function aoImportar(r) {
+    setMostrarImportar(false);
     setPagina(1);
+    setVersaoLista((v) => v + 1);
+    if (r) {
+      setAvisoImportacao(
+        `Importação concluída: ${n(r.novos)} novas, ${n(r.atualizados)} atualizadas, ` +
+        `${n(r.jaClientes)} já são clientes, ${n(r.meiAutonomos)} MEI/autônomos.`
+      );
+    }
     carregarResumo();
   }
 
@@ -211,6 +223,7 @@ export default function ProspeccaoView() {
 
       <div className="gestao-corpo">
         {erro && <div className="login-erro">{erro}</div>}
+        {avisoImportacao && <div className="carteira-aviso">{avisoImportacao}</div>}
 
         <div className="importar-envio" style={{ marginBottom: 8 }}>
           <button className="btn btn-ghost" onClick={() => setMostrarImportar((v) => !v)}>

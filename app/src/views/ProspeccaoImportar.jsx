@@ -55,7 +55,7 @@ export default function ProspeccaoImportar({ aoConcluir }) {
       setPrevia(null);
       setArquivo(null);
       if (entradaRef.current) entradaRef.current.value = "";
-      aoConcluir?.();
+      aoConcluir?.(r.resumo);
     } catch (e) {
       setErro(e.message);
       setFalhouAoGravar(true);
