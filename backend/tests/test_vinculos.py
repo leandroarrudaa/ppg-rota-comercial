@@ -178,6 +178,21 @@ def test_busca_manual_para_vincular(cliente_http, token):
     assert any("Bronze" in c["nome"] for c in r.json())
 
 
+def test_busca_manual_para_vincular_por_codigo_erp(cliente_http, token, db):
+    from app.models import Cliente
+
+    ouro = cliente_http.get("/api/clientes?faixa=Ouro", headers=_auth(token)).json()[0]
+    bronze_db = db.query(Cliente).filter(Cliente.nome == "Empresa Bronze ME").one()
+    bronze_db.codigo_erp = "729"
+    db.commit()
+
+    r = cliente_http.get(f"/api/vinculos/buscar?q=729&excluirId={ouro['id']}", headers=_auth(token))
+    assert r.status_code == 200
+    corpo = r.json()
+    assert any(c["nome"] == "Empresa Bronze ME" for c in corpo)
+    assert next(c for c in corpo if c["nome"] == "Empresa Bronze ME")["codigoErp"] == "729"
+
+
 def test_desvincular_com_dois_membros_desfaz_grupo_inteiro(cliente_http, token):
     ouro = cliente_http.get("/api/clientes?faixa=Ouro", headers=_auth(token)).json()[0]
     bronze = cliente_http.get("/api/clientes?faixa=Bronze", headers=_auth(token)).json()[0]

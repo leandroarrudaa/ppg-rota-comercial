@@ -78,6 +78,12 @@ class Cliente(Base):
     # Unicidade (quando presente) é validada em código, não por constraint,
     # porque UNIQUE em coluna nullable trata NULLs como distintos só em alguns bancos.
     cnpj: Mapped[str | None] = mapped_column(String(20), index=True)
+    # Código interno do ERP — o jeito que o time do escritório (Rafael etc.)
+    # já usa pra achar o cliente lá e lançar pedido, bem mais rápido que
+    # digitar CNPJ. Vem do de-para (MapaCodigoErp), copiado pra cá toda
+    # atualização pelo banco mestre — ver services/atualizacao.py — pra
+    # aparecer em qualquer tela sem precisar de JOIN toda hora.
+    codigo_erp: Mapped[str | None] = mapped_column(String(20), index=True)
     nome: Mapped[str] = mapped_column(String(200))
     endereco: Mapped[str | None] = mapped_column(String(300))
     bairro: Mapped[str | None] = mapped_column(String(100))

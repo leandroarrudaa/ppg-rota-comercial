@@ -71,6 +71,13 @@ def aplicar_pacote(db: Session, dados: dict) -> dict:
         db.bulk_update_mappings(MapaCodigoErp, bloco)
     depara_novos, depara_atualizados = len(depara_criar), len(depara_alterar)
 
+    # Propaga o código pro cadastro do cliente — é o que faz ele aparecer
+    # em toda tela (Gestão, ficha, busca) sem precisar de JOIN toda hora.
+    # Calculado em Python a partir do de-para que acabou de ser montado
+    # (não reconsulta MapaCodigoErp: como autoflush está desligado, a
+    # gravação acima ainda não estaria visível numa query nova).
+    codigo_erp_atualizados = _propagar_codigo_erp(db, {**existentes_depara, **(dados.get("depara") or {})})
+
     # O pacote vem com TUDO, inclusive venda de balcão sem nome na nota. Aqui
     # é o único lugar que sabe quem já é cliente, então é aqui que se filtra:
     # genérico só entra se já for da carteira. A regra de "nome genérico" é a
@@ -94,6 +101,7 @@ def aplicar_pacote(db: Session, dados: dict) -> dict:
     resumo.update({
         "deparaNovos": depara_novos,
         "deparaAtualizados": depara_atualizados,
+        "codigoErpAtualizados": codigo_erp_atualizados,
         "historicoLinhas": historico["linhas"],
         "historicoCriados": historico["criados"],
         "historicoAtualizados": historico["atualizados"],
@@ -106,6 +114,67 @@ def aplicar_pacote(db: Session, dados: dict) -> dict:
         "nomesForaDaCarteira": relatorio.sem_cliente_na_carteira[:20],
     })
     return resumo
+
+
+def _propagar_codigo_erp(db: Session, depara_codigo_para_cnpj: dict[str, str]) -> int:
+    """Copia o código do de-para pro cadastro de cada cliente cujo CNPJ bate.
+
+    Não usa JOIN de SQL de propósito: o CNPJ do cliente vem FORMATADO
+    (com pontuação) e o do de-para vem só dígitos — casar os dois exige
+    normalizar, e normalizar_cnpj é Python, não SQL (ver services/cnpj.py).
+    Por isso lê as duas listas e casa na aplicação, como o resto deste
+    arquivo já faz para depara/histórico.
+    """
+    cnpj_para_codigo: dict[str, str] = {}
+    for codigo, cnpj in depara_codigo_para_cnpj.items():
+        cnpj_para_codigo[cnpj] = codigo  # último código pra cada cnpj, se houver mais de um
+
+    if not cnpj_para_codigo:
+        return 0
+
+    ajustes = []
+    for cid, cnpj_cliente, codigo_atual in db.query(Cliente.id, Cliente.cnpj, Cliente.codigo_erp).filter(
+        Cliente.cnpj.isnot(None)
+    ):
+        codigo_novo = cnpj_para_codigo.get(normalizar_cnpj(cnpj_cliente))
+        if codigo_novo and codigo_novo != codigo_atual:
+            ajustes.append({"id": cid, "codigo_erp": codigo_novo})
+
+    for bloco in _em_blocos(ajustes):
+        db.bulk_update_mappings(Cliente, bloco)
+    return len(ajustes)
+
+
+def preencher_codigo_erp_pendente(db: Session) -> int:
+    """Preenche codigo_erp de quem já tem CNPJ casado no de-para mas ainda
+    não tem o código copiado pro cadastro (ex.: cliente que já existia
+    quando esta coluna foi criada). Roda em toda subida do app (ver
+    main.py) — idempotente, só toca quem está NULL — então tanto o
+    preenchimento retroativo de quem já está cadastrado quanto qualquer
+    cliente que escapar da atualização mensal acabam cobertos sozinhos,
+    sem passo manual. Dá commit direto (é chamado fora do fluxo normal de
+    prévia+confirmação das outras funções deste arquivo)."""
+    mapa = dict(db.query(MapaCodigoErp.codigo, MapaCodigoErp.cnpj).all())
+    if not mapa:
+        return 0
+
+    cnpj_para_codigo: dict[str, str] = {}
+    for codigo, cnpj in mapa.items():
+        cnpj_para_codigo[cnpj] = codigo
+
+    ajustes = []
+    for cid, cnpj_cliente in db.query(Cliente.id, Cliente.cnpj).filter(
+        Cliente.codigo_erp.is_(None), Cliente.cnpj.isnot(None)
+    ):
+        codigo = cnpj_para_codigo.get(normalizar_cnpj(cnpj_cliente))
+        if codigo:
+            ajustes.append({"id": cid, "codigo_erp": codigo})
+
+    for bloco in _em_blocos(ajustes):
+        db.bulk_update_mappings(Cliente, bloco)
+    if ajustes:
+        db.commit()
+    return len(ajustes)
 
 
 # Campos comparados para decidir se a linha mudou de verdade.

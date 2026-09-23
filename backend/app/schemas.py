@@ -58,6 +58,7 @@ class ClienteOut(BaseModel):
     (MapaView, PlanoView, etc.) consome esses nomes de campo sem alteração."""
     id: int
     cnpj: str | None = None
+    codigoErp: str | None = None
     nome: str
     endereco: str | None = None
     bairro: str | None = None
@@ -202,6 +203,7 @@ class ClienteResumo(BaseModel):
     id: int
     nome: str
     cnpj: str | None = None
+    codigoErp: str | None = None
     cidade: str | None = None
     endereco: str | None = None
     faixa: str | None = None

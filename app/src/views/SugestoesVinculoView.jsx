@@ -69,13 +69,17 @@ export default function SugestoesVinculoView() {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginTop: 10 }}>
                   <div>
                     <b>{s.clienteA.nome}</b>
-                    <p className="muted" style={{ fontSize: 12 }}>CNPJ {s.clienteA.cnpj || "—"}</p>
+                    <p className="muted" style={{ fontSize: 12 }}>
+                      CNPJ {s.clienteA.cnpj || "—"}{s.clienteA.codigoErp ? ` · Código ${s.clienteA.codigoErp}` : ""}
+                    </p>
                     <p className="muted" style={{ fontSize: 12 }}>{s.clienteA.endereco || "sem endereço"}{s.clienteA.cidade ? `, ${s.clienteA.cidade}` : ""}</p>
                     <p className="muted" style={{ fontSize: 12 }}>{s.clienteA.faixa || "sem faixa"} · {brl(s.clienteA.fat)}</p>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <b>{s.clienteB.nome}</b>
-                    <p className="muted" style={{ fontSize: 12 }}>CNPJ {s.clienteB.cnpj || "—"}</p>
+                    <p className="muted" style={{ fontSize: 12 }}>
+                      CNPJ {s.clienteB.cnpj || "—"}{s.clienteB.codigoErp ? ` · Código ${s.clienteB.codigoErp}` : ""}
+                    </p>
                     <p className="muted" style={{ fontSize: 12 }}>{s.clienteB.endereco || "sem endereço"}{s.clienteB.cidade ? `, ${s.clienteB.cidade}` : ""}</p>
                     <p className="muted" style={{ fontSize: 12 }}>{s.clienteB.faixa || "sem faixa"} · {brl(s.clienteB.fat)}</p>
                   </div>

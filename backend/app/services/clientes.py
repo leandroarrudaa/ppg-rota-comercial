@@ -23,6 +23,7 @@ def para_saida(c: Cliente, tem_promessa: bool = False, agenda: dict | None = Non
     return ClienteOut(
         id=c.id,
         cnpj=c.cnpj,
+        codigoErp=c.codigo_erp,
         nome=c.nome,
         endereco=c.endereco,
         bairro=c.bairro,
@@ -107,7 +108,9 @@ def listar(
         q = q.filter(Cliente.origem == origem)
     if busca:
         padrao = f"%{busca.strip()}%"
-        q = q.filter(or_(Cliente.nome.ilike(padrao), Cliente.cnpj.ilike(padrao)))
+        q = q.filter(or_(
+            Cliente.nome.ilike(padrao), Cliente.cnpj.ilike(padrao), Cliente.codigo_erp.ilike(padrao),
+        ))
     return q.order_by(Cliente.rfm_score.desc().nullslast(), Cliente.nome).all()
 
 
@@ -207,6 +210,7 @@ def listar_admin(
             Cliente.nome.ilike(padrao),
             Cliente.cnpj.ilike(padrao),
             Cliente.cidade.ilike(padrao),
+            Cliente.codigo_erp.ilike(padrao),
         ))
     if faixa:
         q = q.filter(Cliente.faixa == faixa)

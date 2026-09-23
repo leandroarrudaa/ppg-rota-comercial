@@ -75,6 +75,15 @@ def test_busca_por_nome_cnpj_ou_cidade(db):
     assert [c.nome for c in por_cidade] == ["Empresa Bronze ME"]
 
 
+def test_busca_por_codigo_erp(db):
+    cliente = db.query(Cliente).filter(Cliente.nome == "Empresa Ouro LTDA").one()
+    cliente.codigo_erp = "729"
+    db.commit()
+
+    por_codigo, _ = svc.listar_admin(db, busca="729")
+    assert [c.nome for c in por_codigo] == ["Empresa Ouro LTDA"]
+
+
 def test_pagina_e_conta_o_total_separadamente(db):
     """A carteira tem milhares de linhas: a tela precisa do total sem baixar
     tudo."""

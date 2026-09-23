@@ -225,7 +225,7 @@ export default function CarteiraAdminView() {
       <div className="carteira-filtros">
         <input
           className="input"
-          placeholder="Buscar por nome, CNPJ ou cidade…"
+          placeholder="Buscar por nome, CNPJ, código do ERP ou cidade…"
           value={filtros.busca}
           onChange={(e) => mudarFiltro("busca", e.target.value)}
         />
@@ -374,7 +374,9 @@ export default function CarteiraAdminView() {
                 </td>
                 <td>
                   <div className="carteira-nome">{c.nome}</div>
-                  <div className="faint" style={{ fontSize: 12 }}>{c.cnpj || "sem CNPJ"}</div>
+                  <div className="faint" style={{ fontSize: 12 }}>
+                    {c.cnpj || "sem CNPJ"}{c.codigoErp ? ` · código ${c.codigoErp}` : ""}
+                  </div>
                 </td>
                 <td>{c.cidade || "—"}</td>
                 <td className="num">{c.ultimaCompra ? dataTexto(c.ultimaCompra) : "—"}</td>

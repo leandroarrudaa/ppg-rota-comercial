@@ -200,6 +200,8 @@ export default function ImportarView() {
               <Numero rotulo="Histórico por produto" valor={(resumo.historicoLinhas || 0).toLocaleString("pt-BR")} />
               <Numero rotulo="Códigos do ERP" valor={resumo.deparaNovos + resumo.deparaAtualizados}
                 ajuda="é o que faz o relatório diário funcionar" />
+              <Numero rotulo="Código no cadastro" valor={resumo.codigoErpAtualizados}
+                ajuda="clientes que ganharam/atualizaram o código do ERP na ficha" />
               <Numero rotulo="Sem venda no período" valor={resumo.semVendaNoPeriodo} />
             </div>
           )}

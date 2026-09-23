@@ -11,8 +11,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from .config import config
-from .database import Base, checar_conexao, engine, garantir_colunas, garantir_indices
+from .database import Base, SessaoLocal, checar_conexao, engine, garantir_colunas, garantir_indices
 from .routers import auth, clientes, configuracoes, importacao, prospectos, relatorios, vinculos, visitas
+from .services.atualizacao import preencher_codigo_erp_pendente
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +33,20 @@ async def _manter_banco_acordado():
             log.exception("Falha no keep-alive do banco")
 
 
+def _preencher_codigo_erp_pendente_na_subida() -> None:
+    """Auto-cura: preenche codigo_erp de quem já tem o CNPJ casado no
+    de-para mas ainda não tem o código copiado pro cadastro — é o
+    preenchimento retroativo de quem já era cliente quando essa coluna foi
+    criada, e cobre sozinho qualquer um que escapar disso depois."""
+    db = SessaoLocal()
+    try:
+        atualizados = preencher_codigo_erp_pendente(db)
+        if atualizados:
+            log.info("codigo_erp preenchido para %d clientes", atualizados)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Sobe o app SEM depender do banco.
@@ -46,6 +61,7 @@ async def lifespan(_app: FastAPI):
         await asyncio.to_thread(Base.metadata.create_all, engine)
         await asyncio.to_thread(garantir_colunas)
         await asyncio.to_thread(garantir_indices)
+        await asyncio.to_thread(_preencher_codigo_erp_pendente_na_subida)
     except SQLAlchemyError:
         log.exception("Não foi possível preparar o esquema — app sobe mesmo assim")
 

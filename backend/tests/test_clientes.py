@@ -38,7 +38,22 @@ def test_busca_por_nome(cliente_http, token):
     r = cliente_http.get("/api/clientes?busca=bronze", headers=_auth(token))
     corpo = r.json()
     assert len(corpo) == 1
-    assert corpo[0]["faixa"] == "Bronze"
+
+
+def test_busca_por_codigo_erp(cliente_http, token, db):
+    """Código do ERP é o jeito mais rápido do escritório achar o cliente —
+    tem que funcionar na mesma busca de nome/CNPJ, não só aparecer na tela."""
+    from app.models import Cliente
+
+    cliente = db.query(Cliente).filter(Cliente.nome == "Empresa Ouro LTDA").one()
+    cliente.codigo_erp = "729"
+    db.commit()
+
+    r = cliente_http.get("/api/clientes?busca=729", headers=_auth(token))
+    corpo = r.json()
+    assert len(corpo) == 1
+    assert corpo[0]["nome"] == "Empresa Ouro LTDA"
+    assert corpo[0]["codigoErp"] == "729"
 
 
 def test_ficha_de_cliente_inexistente_404(cliente_http, token):

@@ -76,6 +76,7 @@ def garantir_indices() -> None:
         "CREATE INDEX IF NOT EXISTS ix_clientes_cidade ON clientes (cidade)",
         "CREATE INDEX IF NOT EXISTS ix_clientes_faixa ON clientes (faixa)",
         "CREATE INDEX IF NOT EXISTS ix_visitas_vendedor_status_inicio ON visitas (vendedor_id, status, inicio)",
+        "CREATE INDEX IF NOT EXISTS ix_clientes_codigo_erp ON clientes (codigo_erp)",
     ]
     with engine.begin() as conexao:
         for comando in comandos:
@@ -101,6 +102,7 @@ _COLUNAS_NOVAS = [
     # "sem sucesso" sem querer — funciona igual em SQLite e Postgres.
     ("visitas", "sucesso", "BOOLEAN DEFAULT TRUE"),
     ("visitas", "motivo_insucesso", "VARCHAR(30)"),
+    ("clientes", "codigo_erp", "VARCHAR(20)"),
 ]
 
 

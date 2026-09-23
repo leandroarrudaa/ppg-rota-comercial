@@ -89,7 +89,7 @@ def gerar_sugestoes(db: Session) -> int:
 
 def _resumo(c: Cliente) -> ClienteResumo:
     return ClienteResumo(
-        id=c.id, nome=c.nome, cnpj=c.cnpj, cidade=c.cidade, endereco=c.endereco,
+        id=c.id, nome=c.nome, cnpj=c.cnpj, codigoErp=c.codigo_erp, cidade=c.cidade, endereco=c.endereco,
         faixa=c.faixa, fat=c.fat_total,
     )
 
@@ -174,7 +174,10 @@ def buscar_para_vincular(db: Session, q: str, excluir_id: int) -> list[ClienteRe
     padrao = f"%{q.strip()}%"
     registros = (
         db.query(Cliente)
-        .filter(Cliente.id != excluir_id, (Cliente.nome.ilike(padrao)) | (Cliente.cnpj.ilike(padrao)))
+        .filter(
+            Cliente.id != excluir_id,
+            (Cliente.nome.ilike(padrao)) | (Cliente.cnpj.ilike(padrao)) | (Cliente.codigo_erp.ilike(padrao)),
+        )
         .order_by(Cliente.nome)
         .limit(20)
         .all()

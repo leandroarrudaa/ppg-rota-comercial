@@ -270,7 +270,9 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
           )}
           <h2>{cliente.nome}</h2>
           <p className="muted" style={{ fontSize: 13 }}>
-            CNPJ: {cliente.cnpj || "não informado"} {cliente.cnae ? `· ${cliente.cnae}` : ""}
+            CNPJ: {cliente.cnpj || "não informado"}
+            {cliente.codigoErp ? ` · Código ${cliente.codigoErp}` : ""}
+            {cliente.cnae ? ` · ${cliente.cnae}` : ""}
           </p>
 
           {promessas && promessas.length > 0 && (
@@ -470,7 +472,7 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
               <>
                 <form className="ficha-contato" onSubmit={buscarParaVincular}>
                   <input
-                    className="input" placeholder="Buscar por nome ou CNPJ para vincular"
+                    className="input" placeholder="Buscar por nome, CNPJ ou código para vincular"
                     value={buscaVinculo} onChange={(e) => setBuscaVinculo(e.target.value)}
                   />
                   <button className="btn btn-ghost" type="submit">Buscar</button>
@@ -482,7 +484,7 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
                     <ul className="vinculo-membros">
                       {resultadosVinculo.map((r) => (
                         <li key={r.id}>
-                          <span>{r.nome} · {r.cidade}</span>
+                          <span>{r.nome} · {r.cidade}{r.codigoErp ? ` · código ${r.codigoErp}` : ""}</span>
                           <button className="btn btn-ghost" disabled={vinculando} onClick={() => vincularCom(r.id)}>Vincular</button>
                         </li>
                       ))}
