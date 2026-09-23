@@ -25,6 +25,8 @@ def _para_saida(v: Visita) -> VisitaOut:
         observacao=v.observacao,
         retornoDias=v.retorno_dias,
         retornoData=v.retorno_data,
+        sucesso=v.sucesso,
+        motivoInsucesso=v.motivo_insucesso,
         criadoEm=v.criado_em,
         promessas=[
             PromessaOut(
@@ -155,6 +157,10 @@ def salvar_relatorio(db: Session, vendedor: Usuario, visita_id: int, dados: Rela
     v.retorno_dias = dados.retornoDias
     # data de calendário em Brasília, não a do relógio do servidor (ver tempo.py)
     v.retorno_data = (hoje_brasil() + timedelta(days=dados.retornoDias)) if dados.retornoDias else None
+    v.sucesso = dados.sucesso
+    # limpa o motivo se marcou sucesso — evita ficar um motivo velho de uma
+    # edição anterior "grudado" numa visita que agora está marcada como ok
+    v.motivo_insucesso = dados.motivoInsucesso if not dados.sucesso else None
     v.status = StatusVisita.FINALIZADA
 
     for texto in dados.promessas:

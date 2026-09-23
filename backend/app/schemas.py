@@ -5,7 +5,15 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
-from .models import MotivoRecusaVisita, OrigemCliente, PapelUsuario, StatusCliente, StatusVisita, TipoVisita
+from .models import (
+    MotivoInsucesso,
+    MotivoRecusaVisita,
+    OrigemCliente,
+    PapelUsuario,
+    StatusCliente,
+    StatusVisita,
+    TipoVisita,
+)
 
 
 # ----------------------------------------------------------- Auth
@@ -164,6 +172,10 @@ class VisitaOut(BaseModel):
     observacao: str | None = None
     retornoDias: int | None = None
     retornoData: date | None = None
+    # A visita/contato aconteceu mas deu certo? Default True: histórico
+    # antigo (antes deste campo existir) não vira "sem sucesso" sozinho.
+    sucesso: bool = True
+    motivoInsucesso: MotivoInsucesso | None = None
     criadoEm: datetime
     promessas: list[PromessaOut] = []
 
@@ -173,6 +185,11 @@ class RelatorioVisita(BaseModel):
     observacao: str = Field(min_length=1)
     retornoDias: int | None = None
     promessas: list[str] = []
+    # A visita/contato deu certo? Ortogonal ao status do cliente abaixo —
+    # dá pra não ter conseguido falar com ninguém e mesmo assim nada mudar
+    # no cadastro (ou vice-versa, saber que fechou mesmo sem falar direto).
+    sucesso: bool = True
+    motivoInsucesso: MotivoInsucesso | None = None
     # ajustes de status feitos durante a própria visita (opcional)
     status: StatusCliente | None = None
     aceitaVisita: bool | None = None

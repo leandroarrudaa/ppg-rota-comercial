@@ -18,6 +18,23 @@ const MOTIVOS_INATIVACAO = [
   "Mudou de ramo, não é mais público",
 ];
 
+// Por que a visita/contato NÃO deu certo — alimenta o relatório de
+// efetividade (Relatórios > Visitas/Contato), pra enxergar onde o tempo do
+// vendedor está sendo desperdiçado. Valores batem com MotivoInsucesso no
+// backend (models.py).
+const MOTIVOS_INSUCESSO_VISITA = [
+  { valor: "ausente", rotulo: "Cliente ausente" },
+  { valor: "endereco_nao_encontrado", rotulo: "Endereço não encontrado ou mudou" },
+  { valor: "recusou_atendimento", rotulo: "Recusou atendimento" },
+  { valor: "outro", rotulo: "Outro" },
+];
+const MOTIVOS_INSUCESSO_CONTATO = [
+  { valor: "nao_atendeu", rotulo: "Não atendeu" },
+  { valor: "numero_invalido", rotulo: "Número errado ou não existe" },
+  { valor: "recusou_conversa", rotulo: "Recusou conversar" },
+  { valor: "outro", rotulo: "Outro" },
+];
+
 // Modal BLOQUEANTE: aparece assim que a visita é finalizada e não pode ser
 // fechado sem salvar o relatório — decisão explícita do usuário (preencher
 // depois faz esquecer detalhes). Vem pré-carregado com o último status
@@ -26,11 +43,15 @@ export default function RelatorioVisita({ visita, aoSalvo }) {
   const ehContato = visita.tipo === "contato";
   const rotulo = ehContato ? "contato" : "visita";
 
+  const motivosInsucesso = ehContato ? MOTIVOS_INSUCESSO_CONTATO : MOTIVOS_INSUCESSO_VISITA;
+
   const [cliente, setCliente] = useState(null);
   const [observacao, setObservacao] = useState("");
   const [retornoOpcao, setRetornoOpcao] = useState(15);
   const [retornoCustom, setRetornoCustom] = useState("");
   const [promessas, setPromessas] = useState([""]);
+  const [sucesso, setSucesso] = useState(true);
+  const [motivoInsucesso, setMotivoInsucesso] = useState(motivosInsucesso[0].valor);
   const [status, setStatus] = useState("ativo");
   const [aceitaVisita, setAceitaVisita] = useState(true);
   const [motivo, setMotivo] = useState("calote");
@@ -77,7 +98,9 @@ export default function RelatorioVisita({ visita, aoSalvo }) {
       const atualizada = await api.post(`/api/visitas/${visita.id}/relatorio`, {
         observacao: observacao.trim(),
         retornoDias,
-        promessas: promessas.map((p) => p.trim()).filter(Boolean),
+        promessas: sucesso ? promessas.map((p) => p.trim()).filter(Boolean) : [],
+        sucesso,
+        motivoInsucesso: sucesso ? null : motivoInsucesso,
         status,
         aceitaVisita,
         motivoRecusaVisita: aceitaVisita ? null : motivo,
@@ -102,19 +125,44 @@ export default function RelatorioVisita({ visita, aoSalvo }) {
 
         <form onSubmit={salvar}>
           <div className="ficha-secao" style={{ marginTop: 12, paddingTop: 0, borderTop: "none" }}>
+            <span className="filtro-titulo">{ehContato ? "O contato deu certo?" : "A visita deu certo?"}</span>
+            <div className="ficha-status">
+              <label className="ficha-radio">
+                <input type="radio" checked={sucesso} onChange={() => setSucesso(true)} /> Sim
+              </label>
+              <label className="ficha-radio">
+                <input type="radio" checked={!sucesso} onChange={() => setSucesso(false)} /> Não
+              </label>
+            </div>
+            {!sucesso && (
+              <select
+                className="input" value={motivoInsucesso}
+                onChange={(e) => setMotivoInsucesso(e.target.value)}
+                style={{ marginTop: 8, maxWidth: 260 }}
+              >
+                {motivosInsucesso.map((m) => <option key={m.valor} value={m.valor}>{m.rotulo}</option>)}
+              </select>
+            )}
+          </div>
+
+          <div className="ficha-secao">
             <span className="filtro-titulo">Como foi {ehContato ? "o contato" : "a visita"}</span>
             <textarea
               className="input" rows={3}
-              placeholder={ehContato
-                ? "Ex.: falei com o financeiro, disse que liga na semana que vem…"
-                : "Ex.: cliente satisfeito, fechou pedido de reposição…"}
+              placeholder={
+                sucesso
+                  ? (ehContato
+                    ? "Ex.: falei com o financeiro, disse que liga na semana que vem…"
+                    : "Ex.: cliente satisfeito, fechou pedido de reposição…")
+                  : (ehContato ? "Ex.: liguei 3x, ninguém atendeu…" : "Ex.: fui duas vezes, endereço estava fechado…")
+              }
               value={observacao} onChange={(e) => setObservacao(e.target.value)}
               autoFocus
             />
           </div>
 
           <div className="ficha-secao">
-            <span className="filtro-titulo">Retorno combinado</span>
+            <span className="filtro-titulo">{sucesso ? "Retorno combinado" : "Tentar de novo em"}</span>
             <div className="ficha-status">
               {OPCOES_RETORNO.map((o) => (
                 <label key={o.label} className="ficha-radio">
@@ -132,23 +180,25 @@ export default function RelatorioVisita({ visita, aoSalvo }) {
             )}
           </div>
 
-          <div className="ficha-secao">
-            <span className="filtro-titulo">Promessas feitas nesta visita</span>
-            {promessas.map((p, i) => (
-              <div key={i} style={{ display: "flex", gap: 6 }}>
-                <input
-                  className="input" placeholder="Ex.: levar amostra de parafuso"
-                  value={p} onChange={(e) => atualizarPromessa(i, e.target.value)}
-                />
-                {promessas.length > 1 && (
-                  <button type="button" className="btn btn-ghost" onClick={() => removerPromessa(i)}>Remover</button>
-                )}
-              </div>
-            ))}
-            <button type="button" className="btn btn-ghost" onClick={adicionarPromessa} style={{ alignSelf: "flex-start" }}>
-              + Adicionar promessa
-            </button>
-          </div>
+          {sucesso && (
+            <div className="ficha-secao">
+              <span className="filtro-titulo">Promessas feitas nesta visita</span>
+              {promessas.map((p, i) => (
+                <div key={i} style={{ display: "flex", gap: 6 }}>
+                  <input
+                    className="input" placeholder="Ex.: levar amostra de parafuso"
+                    value={p} onChange={(e) => atualizarPromessa(i, e.target.value)}
+                  />
+                  {promessas.length > 1 && (
+                    <button type="button" className="btn btn-ghost" onClick={() => removerPromessa(i)}>Remover</button>
+                  )}
+                </div>
+              ))}
+              <button type="button" className="btn btn-ghost" onClick={adicionarPromessa} style={{ alignSelf: "flex-start" }}>
+                + Adicionar promessa
+              </button>
+            </div>
+          )}
 
           <div className="ficha-secao">
             <span className="filtro-titulo">Status do cliente</span>

@@ -97,6 +97,10 @@ _COLUNAS_NOVAS = [
     ("prospectos", "situacao_receita", "VARCHAR(30)"),
     ("prospectos", "verificado_em", "TIMESTAMP"),
     ("prospectos", "socios", "VARCHAR(300)"),
+    # DEFAULT TRUE: visita já registrada antes deste campo existir não vira
+    # "sem sucesso" sem querer — funciona igual em SQLite e Postgres.
+    ("visitas", "sucesso", "BOOLEAN DEFAULT TRUE"),
+    ("visitas", "motivo_insucesso", "VARCHAR(30)"),
 ]
 
 

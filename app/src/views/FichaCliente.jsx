@@ -15,6 +15,18 @@ const COLUNAS_HISTORICO = [
   { campo: "valorTotal", rotulo: "Valor", tipo: "numero", ascPadrao: false },
 ];
 
+// Rótulo do motivo de insucesso pro histórico — mesmos valores do backend
+// (MotivoInsucesso em models.py) e das opções em RelatorioVisita.jsx.
+const ROTULOS_MOTIVO_INSUCESSO = {
+  ausente: "cliente ausente",
+  endereco_nao_encontrado: "endereço não encontrado ou mudou",
+  recusou_atendimento: "recusou atendimento",
+  nao_atendeu: "não atendeu",
+  numero_invalido: "número errado ou não existe",
+  recusou_conversa: "recusou conversar",
+  outro: "outro motivo",
+};
+
 // Modal de ficha do cliente: dados cadastrais, contato editável, status/aceitaVisita,
 // promessas pendentes, botão de iniciar visita e histórico de compra por item
 // (maior valor primeiro), paginado sob demanda.
@@ -418,6 +430,11 @@ export default function FichaCliente({ cliente, aoFechar, aoAtualizar, visitaPen
                   </span>
                   {" "}{formatarDataVisita(v.inicio)}
                   {duracaoMin != null && <span className="faint"> · {duracaoMin} min</span>}
+                  {v.sucesso === false && (
+                    <span className="chip chip-risk">
+                      ✗ Sem sucesso{v.motivoInsucesso ? ` — ${ROTULOS_MOTIVO_INSUCESSO[v.motivoInsucesso] || v.motivoInsucesso}` : ""}
+                    </span>
+                  )}
                 </div>
                 <div>{v.observacao}</div>
                 {v.retornoData && <div className="visita-historico-promessas">Retorno combinado: {dataTexto(v.retornoData)}</div>}

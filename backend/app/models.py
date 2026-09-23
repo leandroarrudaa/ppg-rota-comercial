@@ -186,6 +186,21 @@ class TipoVisita(str, enum.Enum):
     CONTATO = "contato"
 
 
+class MotivoInsucesso(str, enum.Enum):
+    """Por que uma visita/contato marcada como concluída não deu certo —
+    orthogonal ao status do cliente (ativo/inativo): o vendedor pode não ter
+    conseguido falar com ninguém e mesmo assim nada mudou no cadastro.
+    Alimenta o relatório de efetividade (Relatórios > Visitas/Contato) —
+    onde o tempo do vendedor está sendo desperdiçado."""
+    AUSENTE = "ausente"                            # visita: ninguém no local
+    ENDERECO_NAO_ENCONTRADO = "endereco_nao_encontrado"  # visita: endereço errado/mudou
+    RECUSOU_ATENDIMENTO = "recusou_atendimento"    # visita: não quis receber
+    NAO_ATENDEU = "nao_atendeu"                    # contato: não atendeu o telefone
+    NUMERO_INVALIDO = "numero_invalido"            # contato: número errado/não existe
+    RECUSOU_CONVERSA = "recusou_conversa"          # contato: atendeu mas não quis falar
+    OUTRO = "outro"
+
+
 class Visita(Base):
     """Uma visita presencial OU um contato por telefone (ver TipoVisita) a um
     cliente. O fluxo é bloqueante: entre 'finalizar' (grava fim) e o relatório
@@ -211,6 +226,14 @@ class Visita(Base):
     # inferida do histórico de compra quando presente (ver lib/recomendacao.js)
     retorno_dias: Mapped[int | None] = mapped_column(Integer)
     retorno_data: Mapped[date | None] = mapped_column(Date)
+    # A visita/contato ACONTECEU (status FINALIZADA) mas deu certo de
+    # verdade? Ortogonal ao status do cliente — o vendedor pode não ter
+    # conseguido falar com ninguém e nada no cadastro muda por causa disso.
+    # Default True: histórico gravado antes deste campo existir não vira
+    # "sem sucesso" sem querer. String simples pelo mesmo motivo do `tipo`
+    # acima (coluna nova em tabela que já existe em produção).
+    sucesso: Mapped[bool] = mapped_column(Boolean, default=True)
+    motivo_insucesso: Mapped[str | None] = mapped_column(String(30))
 
     criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

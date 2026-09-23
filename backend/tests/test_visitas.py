@@ -53,6 +53,69 @@ def test_abrir_e_finalizar_com_relatorio(cliente_http, token):
     assert corpo["retornoData"] == str(hoje_brasil() + timedelta(days=15))
     assert len(corpo["promessas"]) == 1
     assert corpo["promessas"][0]["cumprida"] is False
+    # padrão (sem mandar "sucesso" no corpo) é sucesso=true — histórico
+    # antigo não pode virar "sem sucesso" sozinho
+    assert corpo["sucesso"] is True
+    assert corpo["motivoInsucesso"] is None
+
+
+def test_relatorio_com_sucesso_false_grava_motivo(cliente_http, token):
+    cliente = _cliente_ouro(cliente_http, token)
+    visita = cliente_http.post("/api/visitas", json={"clienteId": cliente["id"]}, headers=_auth(token)).json()
+    cliente_http.patch(f"/api/visitas/{visita['id']}/finalizar", headers=_auth(token))
+
+    r = cliente_http.post(
+        f"/api/visitas/{visita['id']}/relatorio",
+        json={"observacao": "Ninguém no endereço.", "sucesso": False, "motivoInsucesso": "ausente"},
+        headers=_auth(token),
+    )
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["sucesso"] is False
+    assert corpo["motivoInsucesso"] == "ausente"
+
+
+def test_relatorio_com_sucesso_true_limpa_motivo_antigo(cliente_http, token, db):
+    """Reabrir e salvar com sucesso=true não pode deixar um motivo velho
+    'grudado' de uma edição anterior."""
+    from app.models import StatusVisita, Visita
+
+    cliente = _cliente_ouro(cliente_http, token)
+    visita = cliente_http.post("/api/visitas", json={"clienteId": cliente["id"]}, headers=_auth(token)).json()
+    cliente_http.patch(f"/api/visitas/{visita['id']}/finalizar", headers=_auth(token))
+    cliente_http.post(
+        f"/api/visitas/{visita['id']}/relatorio",
+        json={"observacao": "primeira tentativa", "sucesso": False, "motivoInsucesso": "ausente"},
+        headers=_auth(token),
+    )
+
+    # reabre pra simular corrigir o relatório — não existe rota pra isso
+    # ainda, então mexe direto no banco só pra montar o cenário do teste.
+    registro = db.get(Visita, visita["id"])
+    registro.status = StatusVisita.AGUARDANDO_RELATORIO
+    db.commit()
+
+    r = cliente_http.post(
+        f"/api/visitas/{visita['id']}/relatorio",
+        json={"observacao": "consegui falar", "sucesso": True},
+        headers=_auth(token),
+    )
+    corpo = r.json()
+    assert corpo["sucesso"] is True
+    assert corpo["motivoInsucesso"] is None
+
+
+def test_relatorio_rejeita_motivo_insucesso_invalido(cliente_http, token):
+    cliente = _cliente_ouro(cliente_http, token)
+    visita = cliente_http.post("/api/visitas", json={"clienteId": cliente["id"]}, headers=_auth(token)).json()
+    cliente_http.patch(f"/api/visitas/{visita['id']}/finalizar", headers=_auth(token))
+
+    r = cliente_http.post(
+        f"/api/visitas/{visita['id']}/relatorio",
+        json={"observacao": "x", "sucesso": False, "motivoInsucesso": "nao-existe"},
+        headers=_auth(token),
+    )
+    assert r.status_code == 422
 
 
 def test_nao_pode_abrir_segunda_visita_enquanto_primeira_esta_aberta(cliente_http, token):
