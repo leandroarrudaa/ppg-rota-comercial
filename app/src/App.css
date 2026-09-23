@@ -683,6 +683,12 @@ select.input { cursor: pointer; }
 .chip-inativo { background: var(--surface-2); color: var(--faint); }
 .chip-ok { background: var(--ok-bg); color: var(--ok); }
 .chip-erro { background: var(--risk-bg); color: var(--risk); }
+.chip-editavel { cursor: pointer; border: 1px dashed transparent; }
+.chip-editavel:hover { border-color: currentColor; }
+button.chip { border: 1px solid var(--line); background: var(--surface); cursor: pointer; opacity: 0.55; }
+button.chip.on { opacity: 1; border-color: transparent; }
+.edicao-resultado { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.edicao-resultado select.input { width: auto; padding: 6px 10px; font-size: 0.8rem; }
 .chip-motivo { background: var(--bronze-bg); color: var(--bronze-deep); }
 
 .tabela-scroll { overflow-x: auto; margin-top: 4px; -webkit-overflow-scrolling: touch; }

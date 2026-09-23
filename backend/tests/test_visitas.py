@@ -343,3 +343,112 @@ def test_nao_cancela_visita_de_outro_vendedor(cliente_http, token):
 
     recusado = cliente_http.delete(f"/api/visitas/{visita['id']}", headers=_auth(token_outro))
     assert recusado.status_code == 403
+
+
+# ------------------------------------------------- corrigir resultado depois
+# Corrige o "deu certo?" de uma visita já finalizada — pra quando o relatório
+# em campo ficou errado e só se percebe na hora de apurar a comissão.
+
+def _visita_finalizada_via_api(cliente_http, token, *, sucesso=True, motivo_insucesso=None):
+    cliente = _cliente_ouro(cliente_http, token)
+    visita = cliente_http.post("/api/visitas", json={"clienteId": cliente["id"]}, headers=_auth(token)).json()
+    cliente_http.patch(f"/api/visitas/{visita['id']}/finalizar", headers=_auth(token))
+    corpo = {"observacao": "relatório original", "sucesso": sucesso}
+    if motivo_insucesso:
+        corpo["motivoInsucesso"] = motivo_insucesso
+    cliente_http.post(f"/api/visitas/{visita['id']}/relatorio", json=corpo, headers=_auth(token))
+    return visita["id"]
+
+
+def test_corrige_resultado_de_sucesso_para_insucesso(cliente_http, token):
+    visita_id = _visita_finalizada_via_api(cliente_http, token, sucesso=True)
+
+    r = cliente_http.patch(
+        f"/api/visitas/{visita_id}/resultado",
+        json={"sucesso": False, "motivoInsucesso": "endereco_nao_encontrado"},
+        headers=_auth(token),
+    )
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["sucesso"] is False
+    assert corpo["motivoInsucesso"] == "endereco_nao_encontrado"
+
+
+def test_corrigir_para_insucesso_exige_motivo(cliente_http, token):
+    visita_id = _visita_finalizada_via_api(cliente_http, token, sucesso=True)
+
+    r = cliente_http.patch(
+        f"/api/visitas/{visita_id}/resultado", json={"sucesso": False}, headers=_auth(token)
+    )
+    assert r.status_code == 400
+
+
+def test_corrigir_para_sucesso_limpa_o_motivo(cliente_http, token):
+    visita_id = _visita_finalizada_via_api(cliente_http, token, sucesso=False, motivo_insucesso="ausente")
+
+    r = cliente_http.patch(
+        f"/api/visitas/{visita_id}/resultado", json={"sucesso": True}, headers=_auth(token)
+    )
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["sucesso"] is True
+    assert corpo["motivoInsucesso"] is None
+
+
+def test_nao_corrige_resultado_de_visita_ainda_nao_finalizada(cliente_http, token):
+    cliente = _cliente_ouro(cliente_http, token)
+    visita = cliente_http.post("/api/visitas", json={"clienteId": cliente["id"]}, headers=_auth(token)).json()
+
+    r = cliente_http.patch(
+        f"/api/visitas/{visita['id']}/resultado", json={"sucesso": True}, headers=_auth(token)
+    )
+    assert r.status_code == 400
+
+
+def test_vendedor_nao_corrige_resultado_de_visita_de_outro(cliente_http, token):
+    """Taborda pode corrigir o próprio erro, mas não o de outro vendedor."""
+    cliente_http.post(
+        "/api/auth/usuarios",
+        json={"nome": "Taborda", "usuario": "taborda", "senha": "123456", "papel": "vendedor"},
+        headers=_auth(token),
+    )
+    token_taborda = cliente_http.post(
+        "/api/auth/login", json={"usuario": "taborda", "senha": "123456"}
+    ).json()["token"]
+    visita_id = _visita_finalizada_via_api(cliente_http, token_taborda, sucesso=True)
+
+    cliente_http.post(
+        "/api/auth/usuarios",
+        json={"nome": "Outro Vendedor", "usuario": "outro-vend", "senha": "123456", "papel": "vendedor"},
+        headers=_auth(token),
+    )
+    token_outro = cliente_http.post(
+        "/api/auth/login", json={"usuario": "outro-vend", "senha": "123456"}
+    ).json()["token"]
+
+    r = cliente_http.patch(
+        f"/api/visitas/{visita_id}/resultado",
+        json={"sucesso": False, "motivoInsucesso": "ausente"},
+        headers=_auth(token_outro),
+    )
+    assert r.status_code == 403
+
+
+def test_admin_corrige_resultado_de_qualquer_vendedor(cliente_http, token):
+    cliente_http.post(
+        "/api/auth/usuarios",
+        json={"nome": "Taborda", "usuario": "taborda2", "senha": "123456", "papel": "vendedor"},
+        headers=_auth(token),
+    )
+    token_taborda = cliente_http.post(
+        "/api/auth/login", json={"usuario": "taborda2", "senha": "123456"}
+    ).json()["token"]
+    visita_id = _visita_finalizada_via_api(cliente_http, token_taborda, sucesso=True)
+
+    r = cliente_http.patch(
+        f"/api/visitas/{visita_id}/resultado",
+        json={"sucesso": False, "motivoInsucesso": "ausente"},
+        headers=_auth(token),
+    )
+    assert r.status_code == 200
+    assert r.json()["sucesso"] is False

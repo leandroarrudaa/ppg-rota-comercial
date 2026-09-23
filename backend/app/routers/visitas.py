@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Usuario
-from ..schemas import PromessaOut, RelatorioVisita, VisitaAbrir, VisitaOut
+from ..schemas import CorrigirResultadoVisita, PromessaOut, RelatorioVisita, VisitaAbrir, VisitaOut
 from ..services import auth
 from ..services import visitas as svc
 
@@ -68,6 +68,17 @@ def relatorio(
     db: Session = Depends(get_db),
 ):
     return svc.salvar_relatorio(db, usuario, visita_id, dados)
+
+
+@router.patch("/{visita_id}/resultado", response_model=VisitaOut)
+def corrigir_resultado(
+    visita_id: int,
+    dados: CorrigirResultadoVisita,
+    usuario: Usuario = Depends(auth.usuario_atual),
+    db: Session = Depends(get_db),
+):
+    """Corrige o 'deu certo?' de uma visita já finalizada, direto do relatório."""
+    return svc.corrigir_resultado(db, usuario, visita_id, dados.sucesso, dados.motivoInsucesso)
 
 
 @router.patch("/promessas/{promessa_id}/cumprir", response_model=PromessaOut)

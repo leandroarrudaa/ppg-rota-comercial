@@ -197,6 +197,14 @@ class RelatorioVisita(BaseModel):
     motivoRecusaVisita: MotivoRecusaVisita | None = None
 
 
+class CorrigirResultadoVisita(BaseModel):
+    """Correção do 'deu certo?' numa visita já finalizada — usada quando o
+    relatório original ficou errado e só se percebe depois, na apuração da
+    comissão."""
+    sucesso: bool
+    motivoInsucesso: MotivoInsucesso | None = None
+
+
 # ----------------------------------------------------------- Vínculo de CNPJ
 
 class ClienteResumo(BaseModel):

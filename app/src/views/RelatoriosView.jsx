@@ -26,6 +26,19 @@ const ROTULOS_MOTIVO_INSUCESSO = {
   outro: "outro motivo",
 };
 
+const MOTIVOS_INSUCESSO_VISITA = [
+  { valor: "ausente", rotulo: "Cliente ausente" },
+  { valor: "endereco_nao_encontrado", rotulo: "Endereço não encontrado ou mudou" },
+  { valor: "recusou_atendimento", rotulo: "Recusou atendimento" },
+  { valor: "outro", rotulo: "Outro" },
+];
+const MOTIVOS_INSUCESSO_CONTATO = [
+  { valor: "nao_atendeu", rotulo: "Não atendeu" },
+  { valor: "numero_invalido", rotulo: "Número errado ou não existe" },
+  { valor: "recusou_conversa", rotulo: "Recusou conversar" },
+  { valor: "outro", rotulo: "Outro" },
+];
+
 const ROTULO_ORIGEM = { antigo: "Antigo", novo: "Novo" };
 
 // Constrói a data a partir dos componentes (ano, mês, dia) — evita o
@@ -68,6 +81,11 @@ export default function RelatoriosView({ usuario }) {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
   const [gerandoPdf, setGerandoPdf] = useState(false);
+  // Correção do "deu certo?" de uma visita já finalizada, direto no card —
+  // edicao guarda { id, sucesso, motivo } só da visita aberta pra edição.
+  const [edicao, setEdicao] = useState(null);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [erroEdicao, setErroEdicao] = useState("");
 
   useEffect(() => {
     if (!ehAdmin) return;
@@ -194,6 +212,36 @@ export default function RelatoriosView({ usuario }) {
       ],
       visitasDaAba,
     );
+  }
+
+  const motivosDaAba = aba === "visitas" ? MOTIVOS_INSUCESSO_VISITA : MOTIVOS_INSUCESSO_CONTATO;
+
+  function iniciarEdicao(v) {
+    setErroEdicao("");
+    setEdicao({ id: v.id, sucesso: v.sucesso, motivo: v.motivoInsucesso || motivosDaAba[0].valor });
+  }
+
+  async function salvarEdicao() {
+    if (!edicao) return;
+    setSalvandoEdicao(true);
+    setErroEdicao("");
+    try {
+      const atualizado = await api.patch(`/api/visitas/${edicao.id}/resultado`, {
+        sucesso: edicao.sucesso,
+        motivoInsucesso: edicao.sucesso ? null : edicao.motivo,
+      });
+      setDados((prev) => ({
+        ...prev,
+        visitas: prev.visitas.map((v) =>
+          v.id === edicao.id ? { ...v, sucesso: atualizado.sucesso, motivoInsucesso: atualizado.motivoInsucesso } : v
+        ),
+      }));
+      setEdicao(null);
+    } catch (e) {
+      setErroEdicao(e.message);
+    } finally {
+      setSalvandoEdicao(false);
+    }
   }
 
   return (
@@ -332,23 +380,62 @@ export default function RelatoriosView({ usuario }) {
                         {v.clienteCidade ? ` · ${v.clienteCidade}` : ""}{ehAdmin ? ` · ${v.vendedorNome}` : ""}
                       </p>
                       {v.observacao && <p style={{ fontSize: 13, marginTop: 8 }}>{v.observacao}</p>}
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                        {v.sucesso ? (
-                          <span className="chip chip-ok">✓ Deu certo</span>
-                        ) : (
-                          <span className="chip chip-erro">
-                            ✗ Sem sucesso{v.motivoInsucesso ? ` — ${ROTULOS_MOTIVO_INSUCESSO[v.motivoInsucesso] || v.motivoInsucesso}` : ""}
-                          </span>
-                        )}
-                        {v.retornoData && (
-                          <span className="chip chip-gold">Retorno {dataTexto(v.retornoData)}</span>
-                        )}
-                        {v.promessas.map((p) => (
-                          <span key={p.id} className="chip chip-motivo" title={p.texto}>
-                            🎁 {p.cumprida ? "cumprida" : "pendente"}
-                          </span>
-                        ))}
-                      </div>
+                      {edicao?.id === v.id ? (
+                        <div className="edicao-resultado">
+                          <button
+                            type="button"
+                            className={"chip chip-ok" + (edicao.sucesso ? " on" : "")}
+                            onClick={() => setEdicao((e) => ({ ...e, sucesso: true }))}
+                          >
+                            ✓ Deu certo
+                          </button>
+                          <button
+                            type="button"
+                            className={"chip chip-erro" + (!edicao.sucesso ? " on" : "")}
+                            onClick={() => setEdicao((e) => ({ ...e, sucesso: false }))}
+                          >
+                            ✗ Sem sucesso
+                          </button>
+                          {!edicao.sucesso && (
+                            <select
+                              className="input"
+                              value={edicao.motivo}
+                              onChange={(ev) => setEdicao((e) => ({ ...e, motivo: ev.target.value }))}
+                            >
+                              {motivosDaAba.map((m) => (
+                                <option key={m.valor} value={m.valor}>{m.rotulo}</option>
+                              ))}
+                            </select>
+                          )}
+                          <button className="btn btn-primary" disabled={salvandoEdicao} onClick={salvarEdicao}>
+                            {salvandoEdicao ? "Salvando…" : "Salvar"}
+                          </button>
+                          <button className="btn btn-ghost" disabled={salvandoEdicao} onClick={() => setEdicao(null)}>
+                            Cancelar
+                          </button>
+                          {erroEdicao && <span className="login-erro" style={{ fontSize: 12 }}>{erroEdicao}</span>}
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                          {v.sucesso ? (
+                            <span className="chip chip-ok chip-editavel" onClick={() => iniciarEdicao(v)} title="Clique para corrigir">
+                              ✓ Deu certo
+                            </span>
+                          ) : (
+                            <span className="chip chip-erro chip-editavel" onClick={() => iniciarEdicao(v)} title="Clique para corrigir">
+                              ✗ Sem sucesso{v.motivoInsucesso ? ` — ${ROTULOS_MOTIVO_INSUCESSO[v.motivoInsucesso] || v.motivoInsucesso}` : ""}
+                            </span>
+                          )}
+                          {v.retornoData && (
+                            <span className="chip chip-gold">Retorno {dataTexto(v.retornoData)}</span>
+                          )}
+                          {v.promessas.map((p) => (
+                            <span key={p.id} className="chip chip-motivo" title={p.texto}>
+                              🎁 {p.cumprida ? "cumprida" : "pendente"}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

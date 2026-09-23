@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
-from ..models import Cliente, Promessa, StatusVisita, TipoVisita, Usuario, Visita
+from ..models import Cliente, MotivoInsucesso, PapelUsuario, Promessa, StatusVisita, TipoVisita, Usuario, Visita
 from ..schemas import ClienteAtualizar, PromessaOut, RelatorioVisita, VisitaOut
 from . import clientes as clientes_svc
 from .tempo import agora_utc, hoje_brasil, inicio_do_dia_brasil_em_utc
@@ -168,6 +168,30 @@ def salvar_relatorio(db: Session, vendedor: Usuario, visita_id: int, dados: Rela
         if texto:
             db.add(Promessa(cliente_id=v.cliente_id, visita_origem_id=v.id, texto=texto))
 
+    db.commit()
+    db.refresh(v)
+    return _para_saida(v)
+
+
+def corrigir_resultado(
+    db: Session, usuario: Usuario, visita_id: int, sucesso: bool, motivo_insucesso: MotivoInsucesso | None,
+) -> VisitaOut:
+    """Corrige o 'deu certo?' de uma visita já finalizada — o relatório em
+    campo às vezes marca sucesso mas a observação diz que não encontrou o
+    endereço, e isso só é percebido depois, na apuração da comissão do Rafael.
+    Vendedor só corrige as próprias visitas; admin corrige de qualquer um."""
+    v = db.get(Visita, visita_id)
+    if v is None:
+        raise HTTPException(status_code=404, detail="Visita não encontrada")
+    if usuario.papel != PapelUsuario.ADMIN and v.vendedor_id != usuario.id:
+        raise HTTPException(status_code=403, detail="Essa visita não é sua")
+    if v.status != StatusVisita.FINALIZADA:
+        raise HTTPException(status_code=400, detail="Só é possível corrigir uma visita já finalizada.")
+    if not sucesso and motivo_insucesso is None:
+        raise HTTPException(status_code=400, detail="Informe o motivo de não ter dado certo.")
+
+    v.sucesso = sucesso
+    v.motivo_insucesso = motivo_insucesso if not sucesso else None
     db.commit()
     db.refresh(v)
     return _para_saida(v)
