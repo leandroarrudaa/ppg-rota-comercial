@@ -681,6 +681,8 @@ select.input { cursor: pointer; }
 .motivos-inativacao-chips .btn { font-size: 12px; padding: 0.4rem 0.7rem; }
 
 .chip-inativo { background: var(--surface-2); color: var(--faint); }
+.chip-ok { background: var(--ok-bg); color: var(--ok); }
+.chip-erro { background: var(--risk-bg); color: var(--risk); }
 .chip-motivo { background: var(--bronze-bg); color: var(--bronze-deep); }
 
 .tabela-scroll { overflow-x: auto; margin-top: 4px; -webkit-overflow-scrolling: touch; }

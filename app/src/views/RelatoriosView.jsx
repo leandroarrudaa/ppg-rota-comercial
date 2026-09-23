@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { gerarPdfRelatorio } from "../lib/pdf";
+import { baixarCsv } from "../lib/csv";
 import { dataHoraUtc, dataTexto, duracaoTexto, isoLocal } from "../lib/format";
 
 const PRESETS = [
@@ -9,6 +10,23 @@ const PRESETS = [
   { chave: "semana", rotulo: "Esta semana" },
   { chave: "mes", rotulo: "Este mês" },
 ];
+
+const ABAS = [
+  { id: "visitas", rotulo: "Visitas", tipo: "presencial", vazio: "Nenhuma visita finalizada nesse período." },
+  { id: "contato", rotulo: "Contato", tipo: "contato", vazio: "Nenhum contato finalizado nesse período." },
+];
+
+const ROTULOS_MOTIVO_INSUCESSO = {
+  ausente: "cliente ausente",
+  endereco_nao_encontrado: "endereço não encontrado ou mudou",
+  recusou_atendimento: "recusou atendimento",
+  nao_atendeu: "não atendeu",
+  numero_invalido: "número errado ou não existe",
+  recusou_conversa: "recusou conversar",
+  outro: "outro motivo",
+};
+
+const ROTULO_ORIGEM = { antigo: "Antigo", novo: "Novo" };
 
 // Constrói a data a partir dos componentes (ano, mês, dia) — evita o
 // construtor Date(stringSóDeData), que interpreta como meia-noite UTC e
@@ -39,6 +57,8 @@ function limitesDoPreset(chave) {
 
 export default function RelatoriosView({ usuario }) {
   const ehAdmin = usuario.papel === "admin";
+  const [aba, setAba] = useState("visitas");
+  const abaAtual = ABAS.find((a) => a.id === aba);
   const [presetAtivo, setPresetAtivo] = useState("semana");
   const [inicioStr, setInicioStr] = useState(() => isoLocal(limitesDoPreset("semana")[0]));
   const [fimStr, setFimStr] = useState(() => isoLocal(limitesDoPreset("semana")[1]));
@@ -73,31 +93,107 @@ export default function RelatoriosView({ usuario }) {
     setFimStr(isoLocal(fim));
   }
 
+  // A API traz visita e contato juntos no período — cada aba filtra o que
+  // já veio, sem precisar de uma requisição por aba.
+  const visitasDaAba = useMemo(() => {
+    if (!dados) return [];
+    return dados.visitas.filter((v) => v.tipo === abaAtual.tipo);
+  }, [dados, abaAtual]);
+
+  // Efetividade, motivo de insucesso e afins são calculados aqui (não vêm do
+  // backend) porque dependem de qual aba está aberta — visita e contato têm
+  // efetividades diferentes e o resumo do backend não separa por tipo.
+  const resumoAba = useMemo(() => {
+    const lista = visitasDaAba;
+    const comSucesso = lista.filter((v) => v.sucesso).length;
+    const duracoes = lista.filter((v) => v.duracaoMin != null).map((v) => v.duracaoMin);
+    const porMotivo = new Map();
+    for (const v of lista) {
+      if (!v.sucesso) {
+        const chave = v.motivoInsucesso || "outro";
+        porMotivo.set(chave, (porMotivo.get(chave) || 0) + 1);
+      }
+    }
+    return {
+      total: lista.length,
+      comSucesso,
+      semSucesso: lista.length - comSucesso,
+      efetividade: lista.length ? Math.round((comSucesso / lista.length) * 100) : null,
+      clientesUnicos: new Set(lista.map((v) => v.clienteId)).size,
+      duracaoMediaMin: duracoes.length ? Math.round(duracoes.reduce((a, b) => a + b, 0) / duracoes.length) : null,
+      retornosAgendados: lista.filter((v) => v.retornoData).length,
+      porMotivo: [...porMotivo.entries()].sort((a, b) => b[1] - a[1]),
+    };
+  }, [visitasDaAba]);
+
   // Agrupa por dia de calendário LOCAL do instante de início (não a data UTC
   // ingênua que vem da API) — dataHoraUtc marca o fuso certo antes de ler os
   // componentes locais, senão uma visita perto da meia-noite cai no dia errado.
   const grupos = useMemo(() => {
-    if (!dados) return [];
     const porDia = new Map();
-    for (const v of dados.visitas) {
+    for (const v of visitasDaAba) {
       const chave = isoLocal(dataHoraUtc(v.inicio));
       if (!porDia.has(chave)) porDia.set(chave, []);
       porDia.get(chave).push(v);
     }
     return [...porDia.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
-  }, [dados]);
+  }, [visitasDaAba]);
 
   const nomeVendedorFiltrado = ehAdmin && vendedorId
     ? vendedores?.find((v) => String(v.id) === vendedorId)?.nome
     : null;
 
   function baixarPdf() {
-    if (!dados) return;
+    if (visitasDaAba.length === 0) return;
     setGerandoPdf(true);
     const tituloPeriodo = `${dataTexto(inicioStr)} a ${dataTexto(fimStr)}`
       + (nomeVendedorFiltrado ? ` · ${nomeVendedorFiltrado}` : "");
-    gerarPdfRelatorio({ tituloPeriodo, resumo: dados.resumo, visitas: dados.visitas })
+    const resumoPdf = {
+      totalVisitas: resumoAba.total,
+      clientesUnicos: resumoAba.clientesUnicos,
+      duracaoMediaMin: resumoAba.duracaoMediaMin,
+      retornosAgendados: resumoAba.retornosAgendados,
+    };
+    gerarPdfRelatorio({ tituloPeriodo, resumo: resumoPdf, visitas: visitasDaAba })
       .finally(() => setGerandoPdf(false));
+  }
+
+  // CSV pro Rafael apurar comissão: só visita com sucesso conta CNPJ — quem
+  // não recebeu o Taborda ou não atendeu não gera comissão (ver memória do
+  // relatório de comissão).
+  function baixarCsvVisitas() {
+    const linhas = visitasDaAba.filter((v) => v.sucesso);
+    baixarCsv(
+      `visitas-comissao_${inicioStr}_a_${fimStr}.csv`,
+      [
+        { rotulo: "CNPJ", valor: (v) => v.clienteCnpj || "" },
+        { rotulo: "Código do cliente", valor: (v) => v.clienteCodigoErp || "" },
+        { rotulo: "Cliente", valor: (v) => v.clienteNome },
+        { rotulo: "Data", valor: (v) => dataTexto(isoLocal(dataHoraUtc(v.inicio))) },
+        { rotulo: "Vendedor", valor: (v) => v.vendedorNome },
+        { rotulo: "Novo ou antigo", valor: (v) => ROTULO_ORIGEM[v.clienteOrigem] || "" },
+      ],
+      linhas,
+    );
+  }
+
+  // CSV de contato traz sucesso e insucesso junto (com o motivo) e a faixa
+  // RFM — é o que ajuda a entender o perfil de quem atende x não atende.
+  function baixarCsvContato() {
+    baixarCsv(
+      `contatos_${inicioStr}_a_${fimStr}.csv`,
+      [
+        { rotulo: "CNPJ", valor: (v) => v.clienteCnpj || "" },
+        { rotulo: "Código do cliente", valor: (v) => v.clienteCodigoErp || "" },
+        { rotulo: "Cliente", valor: (v) => v.clienteNome },
+        { rotulo: "Data", valor: (v) => dataTexto(isoLocal(dataHoraUtc(v.inicio))) },
+        { rotulo: "Vendedor", valor: (v) => v.vendedorNome },
+        { rotulo: "Faixa RFM", valor: (v) => v.clienteFaixa || "" },
+        { rotulo: "Deu certo?", valor: (v) => (v.sucesso ? "Sim" : "Não") },
+        { rotulo: "Motivo", valor: (v) => (v.sucesso ? "" : ROTULOS_MOTIVO_INSUCESSO[v.motivoInsucesso] || v.motivoInsucesso || "") },
+      ],
+      visitasDaAba,
+    );
   }
 
   return (
@@ -108,6 +204,18 @@ export default function RelatoriosView({ usuario }) {
           <p className="muted" style={{ fontSize: 13 }}>
             {ehAdmin ? "O que o time fez, por período" : "Suas visitas, por período"}
           </p>
+        </div>
+
+        <div className="subtabs">
+          {ABAS.map((a) => (
+            <button
+              key={a.id}
+              className={"subtab" + (aba === a.id ? " on" : "")}
+              onClick={() => setAba(a.id)}
+            >
+              {a.rotulo}
+            </button>
+          ))}
         </div>
 
         <div className="filtro-grupo">
@@ -152,20 +260,42 @@ export default function RelatoriosView({ usuario }) {
         )}
 
         <div className="resumo">
-          <div className="resumo-item"><span>Visitas</span><b>{dados ? dados.resumo.totalVisitas : "—"}</b></div>
-          <div className="resumo-item"><span>Clientes únicos</span><b>{dados ? dados.resumo.clientesUnicos : "—"}</b></div>
-          <div className="resumo-item"><span>Duração média</span><b>{dados ? duracaoTexto(dados.resumo.duracaoMediaMin) : "—"}</b></div>
-          <div className="resumo-item"><span>Promessas feitas</span><b>{dados ? dados.resumo.promessasFeitas : "—"}</b></div>
-          <div className="resumo-item destaque"><span>Retornos agendados</span><b>{dados ? dados.resumo.retornosAgendados : "—"}</b></div>
+          <div className="resumo-item"><span>{aba === "visitas" ? "Visitas feitas" : "Contatos feitos"}</span><b>{dados ? resumoAba.total : "—"}</b></div>
+          <div className="resumo-item destaque"><span>Deram certo</span><b>{dados ? `${resumoAba.comSucesso} (${resumoAba.efetividade ?? 0}%)` : "—"}</b></div>
+          <div className="resumo-item"><span>Não deram certo</span><b>{dados ? resumoAba.semSucesso : "—"}</b></div>
+          <div className="resumo-item"><span>Clientes únicos</span><b>{dados ? resumoAba.clientesUnicos : "—"}</b></div>
+          <div className="resumo-item"><span>Duração média</span><b>{dados ? duracaoTexto(resumoAba.duracaoMediaMin) : "—"}</b></div>
+          <div className="resumo-item"><span>Retornos agendados</span><b>{dados ? resumoAba.retornosAgendados : "—"}</b></div>
         </div>
+
+        {aba === "contato" && resumoAba.porMotivo.length > 0 && (
+          <div className="filtro-grupo">
+            <span className="filtro-titulo">Por que não deu certo</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {resumoAba.porMotivo.map(([motivo, qtd]) => (
+                <div key={motivo} className="resumo-item" style={{ padding: "4px 0" }}>
+                  <span>{ROTULOS_MOTIVO_INSUCESSO[motivo] || motivo}</span><b>{qtd}</b>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <button
           className="btn btn-primary"
           style={{ width: "100%", justifyContent: "center" }}
-          disabled={!dados || dados.visitas.length === 0 || gerandoPdf}
+          disabled={visitasDaAba.length === 0 || gerandoPdf}
           onClick={baixarPdf}
         >
           {gerandoPdf ? "Gerando…" : "Baixar PDF do período"}
+        </button>
+        <button
+          className="btn btn-ghost"
+          style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
+          disabled={aba === "visitas" ? resumoAba.comSucesso === 0 : visitasDaAba.length === 0}
+          onClick={aba === "visitas" ? baixarCsvVisitas : baixarCsvContato}
+        >
+          {aba === "visitas" ? "Baixar CSV para comissão" : "Baixar CSV"}
         </button>
       </aside>
 
@@ -173,9 +303,9 @@ export default function RelatoriosView({ usuario }) {
         {erro && <div className="login-erro" style={{ maxWidth: 800, margin: "0 auto 16px" }}>{erro}</div>}
         {carregando ? (
           <p className="muted" style={{ textAlign: "center" }}>Carregando…</p>
-        ) : !dados || dados.visitas.length === 0 ? (
+        ) : visitasDaAba.length === 0 ? (
           <div className="vazio">
-            <p>Nenhuma visita finalizada nesse período.</p>
+            <p>{abaAtual.vazio}</p>
           </div>
         ) : (
           <div style={{ maxWidth: 800, margin: "0 auto", display: "flex", flexDirection: "column", gap: 22 }}>
@@ -184,7 +314,7 @@ export default function RelatoriosView({ usuario }) {
                 <h4 className="relatorio-dia-titulo">
                   {dataDeChaveLocal(chaveDia).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}
                   <span className="faint" style={{ fontWeight: 500, marginLeft: 8 }}>
-                    {visitasDoDia.length} visita{visitasDoDia.length > 1 ? "s" : ""}
+                    {visitasDoDia.length} {aba === "visitas" ? "visita" : "contato"}{visitasDoDia.length > 1 ? "s" : ""}
                   </span>
                 </h4>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -198,10 +328,18 @@ export default function RelatoriosView({ usuario }) {
                         </span>
                       </div>
                       <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-                        {v.clienteCidade || "sem cidade"}{ehAdmin ? ` · ${v.vendedorNome}` : ""}
+                        {v.clienteCnpj || "sem CNPJ"}{v.clienteCodigoErp ? ` · código ${v.clienteCodigoErp}` : ""}
+                        {v.clienteCidade ? ` · ${v.clienteCidade}` : ""}{ehAdmin ? ` · ${v.vendedorNome}` : ""}
                       </p>
                       {v.observacao && <p style={{ fontSize: 13, marginTop: 8 }}>{v.observacao}</p>}
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                        {v.sucesso ? (
+                          <span className="chip chip-ok">✓ Deu certo</span>
+                        ) : (
+                          <span className="chip chip-erro">
+                            ✗ Sem sucesso{v.motivoInsucesso ? ` — ${ROTULOS_MOTIVO_INSUCESSO[v.motivoInsucesso] || v.motivoInsucesso}` : ""}
+                          </span>
+                        )}
                         {v.retornoData && (
                           <span className="chip chip-gold">Retorno {dataTexto(v.retornoData)}</span>
                         )}

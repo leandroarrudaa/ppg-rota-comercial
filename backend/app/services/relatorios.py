@@ -59,7 +59,11 @@ def _para_item(v: Visita) -> VisitaRelatorioItem:
         id=v.id,
         clienteId=v.cliente_id,
         clienteNome=v.cliente.nome if v.cliente else "Cliente removido",
+        clienteCnpj=v.cliente.cnpj if v.cliente else None,
+        clienteCodigoErp=v.cliente.codigo_erp if v.cliente else None,
         clienteCidade=v.cliente.cidade if v.cliente else None,
+        clienteOrigem=v.cliente.origem if v.cliente else None,
+        clienteFaixa=v.cliente.faixa if v.cliente else None,
         vendedorId=v.vendedor_id,
         vendedorNome=v.vendedor.nome if v.vendedor else "—",
         tipo=v.tipo,
@@ -69,6 +73,8 @@ def _para_item(v: Visita) -> VisitaRelatorioItem:
         observacao=v.observacao,
         retornoDias=v.retorno_dias,
         retornoData=v.retorno_data,
+        sucesso=v.sucesso,
+        motivoInsucesso=v.motivo_insucesso,
         promessas=[
             PromessaOut(
                 id=p.id, clienteId=p.cliente_id, texto=p.texto,
@@ -89,4 +95,6 @@ def _montar_resumo(visitas: list[Visita]) -> RelatorioResumo:
         duracaoMediaMin=round(sum(duracoes) / len(duracoes)) if duracoes else None,
         promessasFeitas=sum(len(v.promessas) for v in visitas),
         retornosAgendados=sum(1 for v in visitas if v.retorno_data is not None),
+        totalComSucesso=sum(1 for v in visitas if v.sucesso),
+        totalSemSucesso=sum(1 for v in visitas if not v.sucesso),
     )

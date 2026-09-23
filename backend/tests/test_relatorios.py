@@ -22,12 +22,16 @@ def _cliente_ouro_id(db):
     return db.query(Cliente).filter(Cliente.nome == "Empresa Ouro LTDA").first().id
 
 
-def _visita_finalizada(db, *, cliente_id, vendedor_id, inicio, duracao_min=20, retorno_dias=None, tipo="presencial"):
+def _visita_finalizada(
+    db, *, cliente_id, vendedor_id, inicio, duracao_min=20, retorno_dias=None, tipo="presencial",
+    sucesso=True, motivo_insucesso=None,
+):
     v = Visita(
         cliente_id=cliente_id, vendedor_id=vendedor_id, inicio=inicio, tipo=tipo,
         fim=inicio + timedelta(minutes=duracao_min), status=StatusVisita.FINALIZADA,
         observacao="ok", retorno_dias=retorno_dias,
         retorno_data=(inicio.date() + timedelta(days=retorno_dias)) if retorno_dias else None,
+        sucesso=sucesso, motivo_insucesso=motivo_insucesso,
     )
     db.add(v)
     db.commit()
@@ -137,6 +141,30 @@ def test_fim_antes_do_inicio_e_rejeitado(cliente_http, admin_e_vendedor):
     _, vendedor = admin_e_vendedor
     r = cliente_http.get("/api/relatorios/visitas?inicio=2026-08-24&fim=2026-08-20", headers=_auth(vendedor))
     assert r.status_code == 400
+
+
+def test_item_traz_cnpj_codigo_erp_e_sucesso_pro_relatorio_do_rafael(cliente_http, db, admin_e_vendedor):
+    """O relatório de comissão do Rafael precisa do CNPJ, do código do ERP e
+    de saber quais visitas deram certo — sem isso ele não consegue apurar."""
+    _, vendedor = admin_e_vendedor
+    cliente = db.query(Cliente).filter(Cliente.nome == "Empresa Ouro LTDA").first()
+    cliente.codigo_erp = "729"
+    db.commit()
+    _visita_finalizada(db, cliente_id=cliente.id, vendedor_id=vendedor.id,
+                        inicio=datetime(2026, 8, 24, 9, 0, 0), sucesso=True)
+    _visita_finalizada(db, cliente_id=cliente.id, vendedor_id=vendedor.id,
+                        inicio=datetime(2026, 8, 24, 10, 0, 0), sucesso=False, motivo_insucesso="ausente")
+
+    r = cliente_http.get("/api/relatorios/visitas?inicio=2026-08-24&fim=2026-08-24", headers=_auth(vendedor))
+    corpo = r.json()
+    assert corpo["resumo"]["totalComSucesso"] == 1
+    assert corpo["resumo"]["totalSemSucesso"] == 1
+    item_sucesso = next(i for i in corpo["visitas"] if i["sucesso"])
+    item_insucesso = next(i for i in corpo["visitas"] if not i["sucesso"])
+    assert item_sucesso["clienteCnpj"] == cliente.cnpj
+    assert item_sucesso["clienteCodigoErp"] == "729"
+    assert item_sucesso["clienteOrigem"] == "antigo"
+    assert item_insucesso["motivoInsucesso"] == "ausente"
 
 
 def test_exige_autenticacao(cliente_http):

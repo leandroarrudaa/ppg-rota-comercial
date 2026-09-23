@@ -262,7 +262,11 @@ class VisitaRelatorioItem(BaseModel):
     id: int
     clienteId: int
     clienteNome: str
+    clienteCnpj: str | None = None
+    clienteCodigoErp: str | None = None
     clienteCidade: str | None = None
+    clienteOrigem: OrigemCliente | None = None
+    clienteFaixa: str | None = None
     vendedorId: int
     vendedorNome: str
     tipo: TipoVisita = TipoVisita.PRESENCIAL
@@ -272,6 +276,8 @@ class VisitaRelatorioItem(BaseModel):
     observacao: str | None = None
     retornoDias: int | None = None
     retornoData: date | None = None
+    sucesso: bool = True
+    motivoInsucesso: MotivoInsucesso | None = None
     promessas: list[PromessaOut] = []
 
 
@@ -285,6 +291,8 @@ class RelatorioResumo(BaseModel):
     duracaoMediaMin: int | None = None
     promessasFeitas: int
     retornosAgendados: int
+    totalComSucesso: int
+    totalSemSucesso: int
 
 
 class RelatorioVisitasOut(BaseModel):
