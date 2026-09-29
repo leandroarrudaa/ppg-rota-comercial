@@ -19,7 +19,7 @@ const COLUNAS_HISTORICO = [
 // (MotivoInsucesso em models.py) e das opções em RelatorioVisita.jsx.
 const ROTULOS_MOTIVO_INSUCESSO = {
   ausente: "cliente ausente",
-  endereco_nao_encontrado: "endereço não encontrado ou mudou",
+  endereco_nao_encontrado: "endereço não confere",
   recusou_atendimento: "recusou atendimento",
   nao_atendeu: "não atendeu",
   numero_invalido: "número errado ou não existe",

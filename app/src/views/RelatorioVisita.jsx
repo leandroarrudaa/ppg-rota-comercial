@@ -24,7 +24,7 @@ const MOTIVOS_INATIVACAO = [
 // backend (models.py).
 const MOTIVOS_INSUCESSO_VISITA = [
   { valor: "ausente", rotulo: "Cliente ausente" },
-  { valor: "endereco_nao_encontrado", rotulo: "Endereço não encontrado ou mudou" },
+  { valor: "endereco_nao_encontrado", rotulo: "Endereço não confere" },
   { valor: "recusou_atendimento", rotulo: "Recusou atendimento" },
   { valor: "outro", rotulo: "Outro" },
 ];

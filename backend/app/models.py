@@ -199,7 +199,7 @@ class MotivoInsucesso(str, enum.Enum):
     Alimenta o relatório de efetividade (Relatórios > Visitas/Contato) —
     onde o tempo do vendedor está sendo desperdiçado."""
     AUSENTE = "ausente"                            # visita: ninguém no local
-    ENDERECO_NAO_ENCONTRADO = "endereco_nao_encontrado"  # visita: endereço errado/mudou
+    ENDERECO_NAO_ENCONTRADO = "endereco_nao_encontrado"  # visita: endereço não confere (não achou, mudou, ou é casa/outra coisa no lugar)
     RECUSOU_ATENDIMENTO = "recusou_atendimento"    # visita: não quis receber
     NAO_ATENDEU = "nao_atendeu"                    # contato: não atendeu o telefone
     NUMERO_INVALIDO = "numero_invalido"            # contato: número errado/não existe

@@ -18,7 +18,7 @@ const ABAS = [
 
 const ROTULOS_MOTIVO_INSUCESSO = {
   ausente: "cliente ausente",
-  endereco_nao_encontrado: "endereço não encontrado ou mudou",
+  endereco_nao_encontrado: "endereço não confere",
   recusou_atendimento: "recusou atendimento",
   nao_atendeu: "não atendeu",
   numero_invalido: "número errado ou não existe",
@@ -28,7 +28,7 @@ const ROTULOS_MOTIVO_INSUCESSO = {
 
 const MOTIVOS_INSUCESSO_VISITA = [
   { valor: "ausente", rotulo: "Cliente ausente" },
-  { valor: "endereco_nao_encontrado", rotulo: "Endereço não encontrado ou mudou" },
+  { valor: "endereco_nao_encontrado", rotulo: "Endereço não confere" },
   { valor: "recusou_atendimento", rotulo: "Recusou atendimento" },
   { valor: "outro", rotulo: "Outro" },
 ];
@@ -209,6 +209,28 @@ export default function RelatoriosView({ usuario }) {
         { rotulo: "Faixa RFM", valor: (v) => v.clienteFaixa || "" },
         { rotulo: "Deu certo?", valor: (v) => (v.sucesso ? "Sim" : "Não") },
         { rotulo: "Motivo", valor: (v) => (v.sucesso ? "" : ROTULOS_MOTIVO_INSUCESSO[v.motivoInsucesso] || v.motivoInsucesso || "") },
+        { rotulo: "Observação", valor: (v) => v.observacao || "" },
+      ],
+      visitasDaAba,
+    );
+  }
+
+  // CSV completo de visita: traz sucesso E insucesso, com motivo e a
+  // observação de texto livre — é o que mostra padrões tipo "casa não é
+  // empresa" que o CSV de comissão (só sucesso) não capta.
+  function baixarCsvVisitasCompleto() {
+    baixarCsv(
+      `visitas-completo_${inicioStr}_a_${fimStr}.csv`,
+      [
+        { rotulo: "CNPJ", valor: (v) => v.clienteCnpj || "" },
+        { rotulo: "Código do cliente", valor: (v) => v.clienteCodigoErp || "" },
+        { rotulo: "Cliente", valor: (v) => v.clienteNome },
+        { rotulo: "Data", valor: (v) => dataTexto(isoLocal(dataHoraUtc(v.inicio))) },
+        { rotulo: "Vendedor", valor: (v) => v.vendedorNome },
+        { rotulo: "Novo ou antigo", valor: (v) => ROTULO_ORIGEM[v.clienteOrigem] || "" },
+        { rotulo: "Deu certo?", valor: (v) => (v.sucesso ? "Sim" : "Não") },
+        { rotulo: "Motivo", valor: (v) => (v.sucesso ? "" : ROTULOS_MOTIVO_INSUCESSO[v.motivoInsucesso] || v.motivoInsucesso || "") },
+        { rotulo: "Observação", valor: (v) => v.observacao || "" },
       ],
       visitasDaAba,
     );
@@ -345,6 +367,16 @@ export default function RelatoriosView({ usuario }) {
         >
           {aba === "visitas" ? "Baixar CSV para comissão" : "Baixar CSV"}
         </button>
+        {aba === "visitas" && (
+          <button
+            className="btn btn-ghost"
+            style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
+            disabled={visitasDaAba.length === 0}
+            onClick={baixarCsvVisitasCompleto}
+          >
+            Baixar CSV completo (com observação)
+          </button>
+        )}
       </aside>
 
       <div className="contato-lista-wrap">
