@@ -133,6 +133,8 @@ def salvar_relatorio(db: Session, vendedor: Usuario, visita_id: int, dados: Rela
             status_code=400,
             detail="Essa visita não está aguardando relatório (finalize a visita primeiro).",
         )
+    if not dados.sucesso and dados.motivoInsucesso is None:
+        raise HTTPException(status_code=400, detail="Informe o motivo de não ter dado certo.")
 
     # valida e aplica ajustes de cliente ANTES de mexer na visita — se a
     # combinação for inválida (ex.: aceitaVisita=false sem motivo), nada

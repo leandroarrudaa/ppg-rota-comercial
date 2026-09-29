@@ -75,6 +75,22 @@ def test_relatorio_com_sucesso_false_grava_motivo(cliente_http, token):
     assert corpo["motivoInsucesso"] == "ausente"
 
 
+def test_relatorio_com_sucesso_false_exige_motivo(cliente_http, token):
+    """Sem motivo obrigatório, tudo que dava errado virava 'ausente' por ser
+    o padrão do menu — mesmo quando a causa real era outra (endereço errado,
+    por exemplo). Ver memória do relatório de comissão."""
+    cliente = _cliente_ouro(cliente_http, token)
+    visita = cliente_http.post("/api/visitas", json={"clienteId": cliente["id"]}, headers=_auth(token)).json()
+    cliente_http.patch(f"/api/visitas/{visita['id']}/finalizar", headers=_auth(token))
+
+    r = cliente_http.post(
+        f"/api/visitas/{visita['id']}/relatorio",
+        json={"observacao": "Ninguém no endereço.", "sucesso": False},
+        headers=_auth(token),
+    )
+    assert r.status_code == 400
+
+
 def test_relatorio_com_sucesso_true_limpa_motivo_antigo(cliente_http, token, db):
     """Reabrir e salvar com sucesso=true não pode deixar um motivo velho
     'grudado' de uma edição anterior."""

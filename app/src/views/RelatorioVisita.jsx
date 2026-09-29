@@ -51,7 +51,11 @@ export default function RelatorioVisita({ visita, aoSalvo }) {
   const [retornoCustom, setRetornoCustom] = useState("");
   const [promessas, setPromessas] = useState([""]);
   const [sucesso, setSucesso] = useState(true);
-  const [motivoInsucesso, setMotivoInsucesso] = useState(motivosInsucesso[0].valor);
+  // Sem pré-seleção de propósito: com um valor padrão, dava pra marcar "não
+  // deu certo" sem nunca abrir o menu — e "cliente ausente" (o primeiro da
+  // lista) ficava grudado em toda visita sem sucesso, mesmo quando a causa
+  // real era outra (endereço errado, casa em vez de empresa etc.).
+  const [motivoInsucesso, setMotivoInsucesso] = useState("");
   const [status, setStatus] = useState("ativo");
   const [aceitaVisita, setAceitaVisita] = useState(true);
   const [motivo, setMotivo] = useState("calote");
@@ -89,6 +93,10 @@ export default function RelatorioVisita({ visita, aoSalvo }) {
     e.preventDefault();
     if (!observacao.trim()) {
       setErro(`Descreva como foi o ${rotulo}.`);
+      return;
+    }
+    if (!sucesso && !motivoInsucesso) {
+      setErro("Selecione o motivo de não ter dado certo.");
       return;
     }
     setEnviando(true);
@@ -140,6 +148,7 @@ export default function RelatorioVisita({ visita, aoSalvo }) {
                 onChange={(e) => setMotivoInsucesso(e.target.value)}
                 style={{ marginTop: 8, maxWidth: 260 }}
               >
+                <option value="" disabled>Selecione o motivo…</option>
                 {motivosInsucesso.map((m) => <option key={m.valor} value={m.valor}>{m.rotulo}</option>)}
               </select>
             )}
