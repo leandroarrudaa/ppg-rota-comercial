@@ -354,7 +354,7 @@ export default function RelatoriosView({ usuario }) {
         <button
           className="btn btn-primary"
           style={{ width: "100%", justifyContent: "center" }}
-          disabled={visitasDaAba.length === 0 || gerandoPdf}
+          disabled={carregando || visitasDaAba.length === 0 || gerandoPdf}
           onClick={baixarPdf}
         >
           {gerandoPdf ? "Gerando…" : "Baixar PDF do período"}
@@ -362,7 +362,7 @@ export default function RelatoriosView({ usuario }) {
         <button
           className="btn btn-ghost"
           style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
-          disabled={aba === "visitas" ? resumoAba.comSucesso === 0 : visitasDaAba.length === 0}
+          disabled={carregando || (aba === "visitas" ? resumoAba.comSucesso === 0 : visitasDaAba.length === 0)}
           onClick={aba === "visitas" ? baixarCsvVisitas : baixarCsvContato}
         >
           {aba === "visitas" ? "Baixar CSV para comissão" : "Baixar CSV"}
@@ -371,7 +371,7 @@ export default function RelatoriosView({ usuario }) {
           <button
             className="btn btn-ghost"
             style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
-            disabled={visitasDaAba.length === 0}
+            disabled={carregando || visitasDaAba.length === 0}
             onClick={baixarCsvVisitasCompleto}
           >
             Baixar CSV completo (com observação)
