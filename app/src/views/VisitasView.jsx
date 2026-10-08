@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
+import { MapContainer, Marker, Polyline, Popup, useMap } from "react-leaflet";
+import FundoMapa from "../components/FundoMapa";
 import L from "leaflet";
 import {
   montarPlanoSemana, otimizarRotaEstrada, vizinhoMaisProximo, refinar2opt, distKm, kmTotalReta,
@@ -406,7 +407,7 @@ export default function VisitasView({ clientes, usuario, aoAbrirRotaDoDia }) {
 
       <div className="mapa-wrap">
         <MapContainer ref={mapRef} center={[-25.095, -50.16]} zoom={12} style={{ height: "100%", width: "100%" }}>
-          <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap &copy; CARTO" subdomains="abcd" />
+          <FundoMapa />
           <MapAutoSize />
           <FitRota pontos={ordem} />
           <Polyline positions={linha} pathOptions={{ color: "#0a0a0b", weight: 4, opacity: 0.65 }} />

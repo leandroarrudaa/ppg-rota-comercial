@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, useMapEvents } from "react-leaflet";
+import FundoMapa from "../components/FundoMapa";
 import { api } from "../lib/api";
 
 // Marca o pin onde o usuário clicar no mini-mapa — sem geocodificação:
@@ -65,7 +66,7 @@ export default function NovoClienteModal({ aoFechar, aoCriado, centro }) {
 
         <div className="novo-cliente-mapa">
           <MapContainer center={centro || [-25.095, -50.16]} zoom={13} style={{ height: "100%", width: "100%" }}>
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap &copy; CARTO" subdomains="abcd" />
+            <FundoMapa />
             <CapturarClique pin={pin} aoClicar={setPin} />
           </MapContainer>
         </div>

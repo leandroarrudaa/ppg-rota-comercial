@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, Popup, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, Polyline, Popup, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import FundoMapa from "../components/FundoMapa";
 import L from "leaflet";
 import { api } from "../lib/api";
 import { valorEstrategico, vizinhoMaisProximo, refinar2opt, otimizarRotaEstrada, motivoVisita } from "../lib/rota";
@@ -405,7 +406,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
         </aside>
         <div className="mapa-wrap">
           <MapContainer center={[rota.ordem[0].lat, rota.ordem[0].lng]} zoom={13} style={{ height: "100%", width: "100%" }}>
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap &copy; CARTO" subdomains="abcd" />
+            <FundoMapa />
             <MapAutoSize />
             <FitRota pontos={rota.ordem} />
             <Polyline positions={linha} pathOptions={{ color: "#0a0a0b", weight: 4, opacity: 0.65 }} />
@@ -615,7 +616,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
 
       <div className="mapa-wrap">
         <MapContainer ref={mapRef} center={cacheCentro} zoom={cacheZoom} preferCanvas style={{ height: "100%", width: "100%" }}>
-          <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap &copy; CARTO" subdomains="abcd" />
+          <FundoMapa />
           <MapAutoSize />
           <ObservarViewport aoMudar={setBbox} visivel={modoMobile === "mapa"} />
           {bboxFiltrado.map((c) => (

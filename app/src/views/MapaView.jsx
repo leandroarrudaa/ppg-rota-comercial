@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
+import { MapContainer, CircleMarker, Popup, useMap } from "react-leaflet";
+import FundoMapa from "../components/FundoMapa";
 import { FAIXAS, corDoCliente, brl, num, recenciaTexto } from "../lib/format";
 import { passaFiltroPotencial, useFiltroPotencial } from "../lib/potencial";
 import ChipFaixa from "../components/ChipFaixa";
@@ -278,11 +279,7 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
           preferCanvas
           style={{ height: "100%", width: "100%" }}
         >
-          <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-            attribution='&copy; OpenStreetMap &copy; CARTO'
-            subdomains="abcd"
-          />
+          <FundoMapa />
           <MapAutoSize />
           <FitBounds pontos={filtrados} />
           {filtrados.map((d) => (
