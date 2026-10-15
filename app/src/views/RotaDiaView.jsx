@@ -11,6 +11,7 @@ import MapAutoSize from "../components/MapAutoSize";
 import ChipFaixa from "../components/ChipFaixa";
 import FiltroPotencial from "../components/FiltroPotencial";
 import FichaCliente from "./FichaCliente";
+import NovoClienteModal from "./NovoClienteModal";
 
 const FXKEY = { Ouro: "gold", Prata: "silver", Bronze: "bronze" };
 const NOTAS_RFM = [1, 2, 3, 4, 5];
@@ -142,6 +143,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
   const [rota, setRota] = useState(estadoInicial.rota); // { ordem, estrada }
   const [carregandoRota, setCarregandoRota] = useState(false);
   const [fichaAberta, setFichaAberta] = useState(null); // cliente selecionado, ou null
+  const [novoClienteAberto, setNovoClienteAberto] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
   // Só importa em telas pequenas: no mobile painel e mapa não cabem juntos,
   // então alterna qual ocupa a tela. Diferente do Mapa (que começa no
@@ -328,6 +330,38 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
     }
   }
 
+  // Empresa achada no caminho: cadastra com o GPS do celular e já abre a
+  // ficha pra iniciar a visita. Entra no mapa da seleção, mas não mexe na
+  // rota já montada (a visita fora da rota é registrada normalmente).
+  function aoCriarCliente(novo) {
+    aoAtualizarCliente(novo);
+    setCandidatosBbox((lista) => [...lista.filter((c) => c.id !== novo.id), novo]);
+    setConhecidos((mapa) => new Map(mapa).set(novo.id, novo));
+    setFichaAberta(novo);
+  }
+
+  const botaoAcheiEmpresa = (
+    <button type="button" className="btn-achei-empresa" onClick={() => setNovoClienteAberto(true)}>
+      + Achei uma empresa
+    </button>
+  );
+
+  // no celular, com o mapa em tela cheia o painel some — esta cópia flutua
+  // sobre o mapa (o CSS esconde no desktop e no modo painel)
+  const botaoAcheiFlutuante = (
+    <button type="button" className="btn-achei-flutuante" onClick={() => setNovoClienteAberto(true)}>
+      + Achei uma empresa
+    </button>
+  );
+
+  const modalNovoCliente = novoClienteAberto && (
+    <NovoClienteModal
+      gpsAoAbrir
+      aoFechar={() => setNovoClienteAberto(false)}
+      aoCriado={aoCriarCliente}
+    />
+  );
+
   const ficha = fichaAberta && (
     <FichaCliente
       cliente={fichaAberta}
@@ -357,11 +391,13 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
         >
           {modoMobile === "mapa" ? "☰ Ver filtros" : "🗺️ Ver mapa"}
         </button>
+        {botaoAcheiFlutuante}
         <aside className="painel">
           <div className="painel-head">
             <h3>Rota do dia</h3>
             <p className="muted" style={{ fontSize: 13 }}>{rota.ordem.length} clientes selecionados</p>
           </div>
+          {botaoAcheiEmpresa}
           <div className="resumo">
             <div className="resumo-item"><span>Distância</span><b>{km.toFixed(0)} km {carregandoRota && <small className="faint">…</small>}</b></div>
             <div className="resumo-item"><span>Tempo em rota</span><b>{Math.floor(min / 60)}h{String(Math.round(min % 60)).padStart(2, "0")}</b></div>
@@ -421,6 +457,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
           </MapContainer>
         </div>
         {ficha}
+        {modalNovoCliente}
       </div>
     );
   }
@@ -434,6 +471,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
       >
         {modoMobile === "mapa" ? "☰ Ver filtros" : "🗺️ Ver mapa"}
       </button>
+      {botaoAcheiFlutuante}
       <aside className="painel rota-dia-painel">
         <div className="painel-head">
           <h3>Rota do dia</h3>
@@ -441,6 +479,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
             Dê zoom/arraste o mapa pra ver os clientes da região, ou busque um cliente específico em qualquer lugar da carteira.
           </p>
         </div>
+        {botaoAcheiEmpresa}
 
         <div className="field search">
           <svg className="search-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
@@ -639,6 +678,7 @@ export default function RotaDiaView({ aoAtualizarCliente, visitaPendente, aoInic
         </MapContainer>
       </div>
       {ficha}
+      {modalNovoCliente}
     </div>
   );
 }

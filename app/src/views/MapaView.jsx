@@ -309,7 +309,7 @@ export default function MapaView({ clientes, aoAtualizarCliente, visitaPendente,
       {novoClienteAberto && (
         <NovoClienteModal
           aoFechar={() => setNovoClienteAberto(false)}
-          aoCriado={(novo) => { aoAtualizarCliente(novo); setSel(novo); }}
+          aoCriado={(novo) => { aoAtualizarCliente(novo); setSel(novo); setFichaAberta(true); }}
         />
       )}
     </div>
