@@ -12,13 +12,18 @@ import { api, limparSessao, registrarAoExpirar, tokenSalvo, usuarioSalvo } from 
 const MapaView = lazy(() => import("./views/MapaView"));
 const PlanoView = lazy(() => import("./views/PlanoView"));
 const RotaDiaView = lazy(() => import("./views/RotaDiaView"));
+const PertoDeMimView = lazy(() => import("./views/PertoDeMimView"));
 const RelatoriosView = lazy(() => import("./views/RelatoriosView"));
 const GestaoView = lazy(() => import("./views/GestaoView"));
 const ProspeccaoView = lazy(() => import("./views/ProspeccaoView"));
 const UsuariosView = lazy(() => import("./views/UsuariosView"));
 const RelatorioVisita = lazy(() => import("./views/RelatorioVisita"));
 
-const ABAS_BASE = ["Mapa", "Plano da Semana", "Rota do Dia", "Relatórios"];
+// "Rota do Dia" saiu do menu a pedido do Taborda (substituída por "Perto de
+// mim"), mas o código e a renderização continuam: o botão "Usar esta rota
+// hoje" do Plano da Semana ainda abre ela. Pra religar no menu, é só voltar
+// "Rota do Dia" pra esta lista.
+const ABAS_BASE = ["Mapa", "Plano da Semana", "Perto de mim", "Relatórios"];
 
 export default function App() {
   const [aba, setAba] = useState("Mapa");
@@ -222,6 +227,17 @@ export default function App() {
           />
         ) : aba === "Rota do Dia" ? (
           <RotaDiaView
+            aoAtualizarCliente={atualizarClienteLocal}
+            visitaPendente={visitaPendente}
+            aoIniciarVisita={iniciarVisita}
+            aoFinalizarVisita={finalizarVisita}
+            aoCancelarVisita={cancelarVisita}
+            visitasHojeIds={visitasHojeIds}
+            usuario={usuario}
+          />
+        ) : aba === "Perto de mim" ? (
+          <PertoDeMimView
+            clientes={clientes}
             aoAtualizarCliente={atualizarClienteLocal}
             visitaPendente={visitaPendente}
             aoIniciarVisita={iniciarVisita}

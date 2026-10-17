@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "app",
       "port": 5175
+    },
+    {
+      "name": "ppg-rota-frontend-build",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "preview", "--port", "5175", "--strictPort"],
+      "cwd": "app",
+      "port": 5175
     }
   ]
 }
