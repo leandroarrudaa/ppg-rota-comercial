@@ -19,11 +19,7 @@ const ProspeccaoView = lazy(() => import("./views/ProspeccaoView"));
 const UsuariosView = lazy(() => import("./views/UsuariosView"));
 const RelatorioVisita = lazy(() => import("./views/RelatorioVisita"));
 
-// "Rota do Dia" saiu do menu a pedido do Taborda (substituída por "Perto de
-// mim"), mas o código e a renderização continuam: o botão "Usar esta rota
-// hoje" do Plano da Semana ainda abre ela. Pra religar no menu, é só voltar
-// "Rota do Dia" pra esta lista.
-const ABAS_BASE = ["Mapa", "Plano da Semana", "Perto de mim", "Relatórios"];
+const ABAS_BASE = ["Mapa", "Plano da Semana", "Rota do Dia", "Perto de mim", "Relatórios"];
 
 export default function App() {
   const [aba, setAba] = useState("Mapa");
